@@ -38,6 +38,9 @@ On your Postgres server at 10.0.0.139:
 CREATE DATABASE finance_auth;
 CREATE USER finance_auth WITH PASSWORD 'your_password';
 GRANT ALL PRIVILEGES ON DATABASE finance_auth TO finance_auth;
+-- Required on Postgres 15+ (revoked public schema access by default):
+\c finance_auth
+GRANT USAGE, CREATE ON SCHEMA public TO finance_auth;
 ```
 
 The schema (users, auth_codes, refresh_tokens) is created automatically on

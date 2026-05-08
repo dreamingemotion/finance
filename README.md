@@ -75,12 +75,17 @@ Access tokens are short-lived (~15 min) and are refreshed automatically. The ref
 python shared/transport.py
 ```
 
-### Streamable HTTP (remote/networked clients)
+### SSE (remote/networked clients)
 
 ```bash
-python shared/transport.py --transport streamable-http
-python shared/transport.py --transport streamable-http --host 0.0.0.0 --port 8000 --path /mcp
+python shared/transport.py --transport sse
+python shared/transport.py --transport sse --host 0.0.0.0 --port 8000
+
+# With OAuth 2.1 authentication (recommended for cloud deployments):
+python shared/transport.py --transport sse --require-auth
 ```
+
+See [`shared/auth/README.md`](shared/auth/README.md) for the full cloud deployment guide including the OAuth server, Postgres setup, and systemd services.
 
 ---
 
@@ -108,7 +113,7 @@ Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS)
 
 ### Cursor / Zed / Continue
 
-Point to the same command in your MCP settings, or use the streamable-http transport if running the server separately and configure the URL (e.g. `http://localhost:8000/mcp`).
+Point to the same command in your MCP settings, or use the SSE transport if running the server separately and configure the URL (e.g. `http://localhost:8000/sse`).
 
 ---
 
@@ -180,6 +185,13 @@ Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
 finance/
 └── shared/
     ├── transport.py              # MCP server entry point — owns all tool definitions
+    ├── auth/
+    │   ├── server.py             # Standalone OAuth 2.1 server (port 8001)
+    │   ├── db.py                 # asyncpg connection pool + schema init
+    │   ├── users.py              # User management + password verification
+    │   ├── tokens.py             # JWT access tokens + refresh token rotation
+    │   ├── middleware.py         # Bearer token validator for transport.py
+    │   └── README.md             # Cloud deployment guide
     └── data/
         └── brokers/
             ├── tastytrade.py     # TastytradeClient — pure data client, no MCP coupling
