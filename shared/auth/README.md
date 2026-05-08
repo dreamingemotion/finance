@@ -53,12 +53,12 @@ the same `JWT_SECRET`):
 
 ```bash
 # Auth server
-export DATABASE_URL='postgresql://finance_auth:your_password@10.0.0.139:5432/finance_auth'
-export JWT_SECRET="$(openssl rand -hex 32)"   # generate once, use everywhere
+export DATABASE_URL='postgresql://finance_auth:Tr0ub4dor&3@10.0.0.139:5432/finance_auth'
+export JWT_SECRET='a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5'
 
 # MCP server (in addition to Tastytrade creds)
-export JWT_SECRET='<same value as above>'
-export AUTH_SERVER_URL='https://your-server:8001'   # public URL of the auth server
+export JWT_SECRET='a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5'
+export AUTH_SERVER_URL='https://finance.example.com:8001'
 ```
 
 > **Note:** Use single quotes around values that contain special characters (`!`, `@`, `$`, etc.).
@@ -139,12 +139,12 @@ WantedBy=multi-user.target
 
 **/etc/finance.env** (chmod 600, owned by root)
 ```
-DATABASE_URL=postgresql://finance_auth:your_password@10.0.0.139:5432/finance_auth
-JWT_SECRET=your_generated_secret
-AUTH_SERVER_URL=https://your-server:8001
-TT_CLIENT_ID=your_tt_client_id
-TT_CLIENT_SECRET=your_tt_client_secret
-TT_REFRESH_TOKEN=your_tt_refresh_token
+DATABASE_URL=postgresql://finance_auth:Tr0ub4dor&3@10.0.0.139:5432/finance_auth
+JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
+AUTH_SERVER_URL=https://finance.example.com:8001
+TT_CLIENT_ID=tt_oauth_aBcD1234EfGh
+TT_CLIENT_SECRET=tt_secret_xYz9876WvUt
+TT_REFRESH_TOKEN=tt_refresh_mNpQ5432RsTu
 ```
 
 Enable and start:
