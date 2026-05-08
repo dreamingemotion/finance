@@ -18,7 +18,24 @@ Compatible with any MCP client: Claude Desktop, Cursor, Zed, Continue, or any ho
 ```bash
 git clone https://github.com/dreamingemotion/finance.git
 cd finance
-pip install mcp httpx pydantic websockets
+```
+
+Create and activate a virtual environment:
+
+```bash
+# macOS / Linux
+python -m venv .venv
+source .venv/bin/activate
+
+# Windows (PowerShell)
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
 ```
 
 ---
