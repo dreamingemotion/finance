@@ -77,22 +77,22 @@ the vector index are created automatically on first startup.
 
 ### 2. Environment variables
 
-```bash
+Add these to `/etc/finance.env` alongside the existing entries (see `shared/auth/README.md`). No quotes needed — systemd reads these as plain `KEY=VALUE` pairs:
+
+```
 # Required
-export KNOWLEDGE_DATABASE_URL="postgresql://finance_knowledge:your_password@10.0.0.139:5432/finance"
-export OPENROUTER_API_KEY="your_openrouter_api_key"
+KNOWLEDGE_DATABASE_URL=postgresql://finance_knowledge:Tr0ub4dor&3@10.0.0.139:5432/finance
+OPENROUTER_API_KEY=sk-or-v1-aBcD1234EfGhIjKl5678MnOpQrStUvWx
 
 # Optional — these are the defaults
-export OPENROUTER_BASE_URL="https://openrouter.ai/api/v1"
-export GENERATION_MODEL="anthropic/claude-sonnet-4-6"   # used for chunk extraction
-export EMBEDDING_MODEL="openai/text-embedding-3-large"  # 3072-dim vectors
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+GENERATION_MODEL=anthropic/claude-sonnet-4-6
+EMBEDDING_MODEL=openai/text-embedding-3-large
 
-# Required only if running with --require-auth
-export JWT_SECRET="<same value as auth server and market data server>"
-export AUTH_SERVER_URL="https://your-server:8001"
+# Required only if running with --require-auth (same value as auth + market data servers)
+JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
+AUTH_SERVER_URL=https://finance.example.com:8001
 ```
-
-Add these to `/etc/finance.env` alongside the existing entries (see `shared/auth/README.md`).
 
 ### 3. Install dependencies
 

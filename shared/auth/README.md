@@ -111,8 +111,8 @@ After=network.target postgresql.service
 
 [Service]
 User=ubuntu
-WorkingDirectory=/path/to/finance/shared
-ExecStart=/path/to/finance/.venv/bin/python -m auth.server serve
+WorkingDirectory=/opt/agents/finance/shared
+ExecStart=/opt/agents/finance/.venv/bin/python -m auth.server serve
 EnvironmentFile=/etc/finance.env
 Restart=always
 
@@ -128,8 +128,8 @@ After=network.target finance-auth.service
 
 [Service]
 User=ubuntu
-WorkingDirectory=/path/to/finance/shared
-ExecStart=/path/to/finance/.venv/bin/python transport.py --transport sse --require-auth
+WorkingDirectory=/opt/agents/finance/shared
+ExecStart=/opt/agents/finance/.venv/bin/python transport.py --transport sse --require-auth
 EnvironmentFile=/etc/finance.env
 Restart=always
 
