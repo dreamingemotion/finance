@@ -17,7 +17,7 @@ finance/
 │   └── data/
 │       └── brokers/    ← pure data clients (no MCP coupling)
 │
-├── knowledge/          ← knowledge MCP server (ingestion + search tools, port 8002)
+├── knowledge/          ← knowledge MCP server (ingestion + search tools, port 8092)
 ├── signals/            ← (future) trade signals MCP server — imports shared/
 ├── portfolio/          ← (future) portfolio MCP server — imports shared/
 └── ...                 ← future purpose-built MCP servers
@@ -102,7 +102,7 @@ python shared/transport.py
 
 ```bash
 python shared/transport.py --transport sse
-python shared/transport.py --transport sse --host 0.0.0.0 --port 8000
+python shared/transport.py --transport sse --host 0.0.0.0 --port 8091
 
 # With OAuth 2.1 authentication (recommended for cloud deployments):
 python shared/transport.py --transport sse --require-auth
@@ -186,14 +186,14 @@ Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
 
 ```
 finance/
-├── knowledge/                    # Knowledge MCP server (port 8002)
+├── knowledge/                    # Knowledge MCP server (port 8092)
 │   ├── server.py                 # FastMCP — ingest + search tools
 │   └── ingest.py                 # Claude-powered chunking + categorization
 │
 └── shared/                       # Foundation library
     ├── transport.py              # Standalone market data MCP server + importable utilities
     ├── auth/
-    │   ├── server.py             # Standalone OAuth 2.1 server (port 8001)
+    │   ├── server.py             # Standalone OAuth 2.1 server (port 8090)
     │   ├── db.py                 # asyncpg connection pool + schema init
     │   ├── users.py              # User management + password verification
     │   ├── tokens.py             # JWT access tokens + refresh token rotation

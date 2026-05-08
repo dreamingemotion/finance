@@ -9,7 +9,7 @@ Endpoints:
   POST /revoke                                  — revoke a refresh token
 
 Usage:
-  python server.py serve [--host 0.0.0.0] [--port 8001]
+  python server.py serve [--host 0.0.0.0] [--port 8090]
   python server.py add-user --email user@example.com --password secret
   python server.py generate-token --email user@example.com
 
@@ -399,7 +399,7 @@ def main() -> None:
 
     serve_p = sub.add_parser("serve", help="Start the OAuth server (default)")
     serve_p.add_argument("--host", default="0.0.0.0")
-    serve_p.add_argument("--port", type=int, default=8001)
+    serve_p.add_argument("--port", type=int, default=8090)
 
     user_p = sub.add_parser("add-user", help="Create a new user account")
     user_p.add_argument("--email", required=True)
@@ -418,7 +418,7 @@ def main() -> None:
         uvicorn.run(
             "auth.server:app",
             host=getattr(args, "host", "0.0.0.0"),
-            port=getattr(args, "port", 8001),
+            port=getattr(args, "port", 8090),
             reload=False,
         )
 

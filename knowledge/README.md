@@ -7,7 +7,7 @@ discrete insight units using Claude, embeds them with `text-embedding-3-large`, 
 everything in Postgres with pgvector. Future analysis sessions query the knowledge base
 via semantic similarity and category filters.
 
-Runs on port 8002. Shares the same OAuth infrastructure as the market data server (port 8000).
+Runs on port 8092. Shares the same OAuth infrastructure as the market data server (port 8091).
 
 ---
 
@@ -91,7 +91,7 @@ EMBEDDING_MODEL=openai/text-embedding-3-large
 
 # Required only if running with --require-auth (same value as auth + market data servers)
 JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
-AUTH_SERVER_URL=https://finance.example.com:8001
+AUTH_SERVER_URL=https://finance.example.com:8090
 ```
 
 ### 3. Install dependencies
@@ -116,13 +116,13 @@ python -m knowledge.server
 ### SSE without auth (development)
 
 ```bash
-python -m knowledge.server --transport sse --port 8002
+python -m knowledge.server --transport sse --port 8092
 ```
 
 ### SSE with OAuth (recommended for cloud)
 
 ```bash
-python -m knowledge.server --transport sse --port 8002 --require-auth
+python -m knowledge.server --transport sse --port 8092 --require-auth
 ```
 
 ### Systemd service
@@ -136,7 +136,7 @@ After=network.target postgresql.service finance-auth.service
 [Service]
 User=ubuntu
 WorkingDirectory=/path/to/finance
-ExecStart=/path/to/finance/.venv/bin/python -m knowledge.server --transport sse --port 8002 --require-auth
+ExecStart=/path/to/finance/.venv/bin/python -m knowledge.server --transport sse --port 8092 --require-auth
 EnvironmentFile=/etc/finance.env
 Restart=always
 

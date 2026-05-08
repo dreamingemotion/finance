@@ -66,7 +66,7 @@ these as plain `KEY=VALUE` pairs:
 ```
 DATABASE_URL=postgresql://finance_auth:Tr0ub4dor&3@10.0.0.139:5432/finance_auth
 JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
-AUTH_SERVER_URL=https://finance.example.com:8001
+AUTH_SERVER_URL=https://finance.example.com:8090
 TT_CLIENT_ID=tt_oauth_aBcD1234EfGh
 TT_CLIENT_SECRET=tt_secret_xYz9876WvUt
 TT_REFRESH_TOKEN=tt_refresh_mNpQ5432RsTu
@@ -111,7 +111,7 @@ python -m auth.server add-user --email you@example.com --password yourpassword
 
 ```bash
 cd /opt/agents/finance/shared
-python -m auth.server serve --host 0.0.0.0 --port 8001
+python -m auth.server serve --host 0.0.0.0 --port 8090
 ```
 
 ### Systemd service
@@ -163,7 +163,7 @@ python -m auth.server generate-token --email user@example.com
 - Refresh tokens are rotated on every use (OAuth 2.1 token rotation).
 - The auth server should be behind TLS in production. Use nginx or Caddy as a
   reverse proxy with a Let's Encrypt certificate.
-- `AUTH_SERVER_URL` must be the public HTTPS URL — not `http://0.0.0.0:8001`.
+- `AUTH_SERVER_URL` must be the public HTTPS URL — not `http://0.0.0.0:8090`.
 
 ---
 

@@ -10,7 +10,7 @@ Usage:
 
     # SSE HTTP (for remote/cloud clients)
     python transport.py --transport sse
-    python transport.py --transport sse --host 0.0.0.0 --port 8000
+    python transport.py --transport sse --host 0.0.0.0 --port 8091
 
     # SSE HTTP with OAuth 2.1 token validation
     python transport.py --transport sse --require-auth
@@ -329,8 +329,8 @@ def main() -> None:
     parser.add_argument(
         "--port",
         type=int,
-        default=8000,
-        help="Bind port for SSE transport (default: 8000)",
+        default=8091,
+        help="Bind port for SSE transport (default: 8091)",
     )
     parser.add_argument(
         "--require-auth",

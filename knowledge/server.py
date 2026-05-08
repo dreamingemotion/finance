@@ -6,7 +6,7 @@ and category-based retrieval over the stored knowledge base.
 
 Usage:
     python -m knowledge.server                          # stdio
-    python -m knowledge.server --transport sse          # SSE on port 8002
+    python -m knowledge.server --transport sse          # SSE on port 8092
     python -m knowledge.server --transport sse --require-auth
 
 Environment variables:
@@ -136,7 +136,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Knowledge MCP server")
     parser.add_argument("--transport", choices=["stdio", "sse"], default="stdio")
     parser.add_argument("--host", default="0.0.0.0")
-    parser.add_argument("--port", type=int, default=8002)
+    parser.add_argument("--port", type=int, default=8092)
     parser.add_argument("--require-auth", action="store_true")
     args = parser.parse_args()
 
