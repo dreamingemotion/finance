@@ -53,13 +53,16 @@ the same `JWT_SECRET`):
 
 ```bash
 # Auth server
-export DATABASE_URL="postgresql://finance_auth:your_password@10.0.0.139:5432/finance_auth"
+export DATABASE_URL='postgresql://finance_auth:your_password@10.0.0.139:5432/finance_auth'
 export JWT_SECRET="$(openssl rand -hex 32)"   # generate once, use everywhere
 
 # MCP server (in addition to Tastytrade creds)
-export JWT_SECRET="<same value as above>"
-export AUTH_SERVER_URL="https://your-server:8001"   # public URL of the auth server
+export JWT_SECRET='<same value as above>'
+export AUTH_SERVER_URL='https://your-server:8001'   # public URL of the auth server
 ```
+
+> **Note:** Use single quotes around values that contain special characters (`!`, `@`, `$`, etc.).
+> Double quotes cause bash to interpret `!` as history expansion, resulting in "event not found" errors.
 
 Put these in `/etc/environment` or your systemd service files so they persist
 across reboots.
