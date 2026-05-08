@@ -1,8 +1,27 @@
 # finance
 
-MCP server for market data. Tastytrade is the primary source (REST snapshots + DXLink live streaming); Yahoo Finance is the automatic fallback. When the live feed is unavailable, responses include a `_note` field indicating delayed data.
+Foundation library and MCP server stack for market data and financial tooling.
 
-Compatible with any MCP client: Claude Desktop, Cursor, Zed, Continue, or any host that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
+The `shared/` directory is a library — all future MCP servers in this project import from it. `shared/transport.py` is a fully functional standalone market data MCP server (useful now and as a reference); purpose-built MCP servers (e.g. a trade signals server, portfolio server) will live at the top level and import from `shared/` as they are built.
+
+---
+
+## Architecture
+
+```
+finance/
+├── shared/          ← foundation library (data clients, auth, transport utilities)
+│   ├── transport.py ← standalone market data MCP server (runnable + importable)
+│   ├── auth/        ← OAuth 2.1 server and JWT middleware
+│   └── data/
+│       └── brokers/ ← pure data clients (no MCP coupling)
+│
+├── signals/         ← (future) trade signals MCP server — imports shared/
+├── portfolio/       ← (future) portfolio MCP server — imports shared/
+└── ...              ← future purpose-built MCP servers
+```
+
+MCP clients (Claude Desktop, Cursor, Zed, etc.) connect to top-level MCP servers, not directly to `shared/transport.py` in production. Today `shared/transport.py` works as a complete market data server.
 
 ---
 
@@ -67,7 +86,9 @@ Access tokens are short-lived (~15 min) and are refreshed automatically. The ref
 
 ---
 
-## Running the server
+## Running the market data server
+
+`shared/transport.py` is a complete, runnable market data MCP server.
 
 ### stdio (local clients — Claude Desktop, Cursor, Zed, etc.)
 
@@ -90,6 +111,8 @@ See [`shared/auth/README.md`](shared/auth/README.md) for the full cloud deployme
 ---
 
 ## MCP client configuration
+
+Point your MCP client at `shared/transport.py` for local use. Future top-level MCP servers will replace this as they are built.
 
 ### Claude Desktop
 
@@ -184,13 +207,13 @@ Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
 ```
 finance/
 └── shared/
-    ├── transport.py              # MCP server entry point — owns all tool definitions
+    ├── transport.py              # Standalone market data MCP server + importable utilities
     ├── auth/
     │   ├── server.py             # Standalone OAuth 2.1 server (port 8001)
     │   ├── db.py                 # asyncpg connection pool + schema init
     │   ├── users.py              # User management + password verification
     │   ├── tokens.py             # JWT access tokens + refresh token rotation
-    │   ├── middleware.py         # Bearer token validator for transport.py
+    │   ├── middleware.py         # Bearer token validator for MCP servers
     │   └── README.md             # Cloud deployment guide
     └── data/
         └── brokers/
@@ -198,4 +221,4 @@ finance/
             └── yahoo.py          # YahooClient — pure data client, no MCP coupling
 ```
 
-Each broker file is a self-contained data client with no MCP dependencies. `transport.py` instantiates both clients, defines all tools, and wires up the `_with_fallback` helper for shared tools.
+`shared/data/brokers/` — self-contained data clients with no MCP dependencies. `shared/transport.py` instantiates both clients, defines all tools, and wires up the `_with_fallback` helper. Future top-level MCP servers import `TastytradeClient`, `YahooClient`, and `_with_fallback` from `shared/` and define their own tool sets.
