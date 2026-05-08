@@ -10,18 +10,20 @@ The `shared/` directory is a library — all future MCP servers in this project 
 
 ```
 finance/
-├── shared/          ← foundation library (data clients, auth, transport utilities)
-│   ├── transport.py ← standalone market data MCP server (runnable + importable)
-│   ├── auth/        ← OAuth 2.1 server and JWT middleware
+├── shared/             ← foundation library imported by all MCP servers
+│   ├── transport.py    ← standalone market data MCP server (runnable + importable)
+│   ├── auth/           ← OAuth 2.1 server and JWT middleware
+│   ├── knowledge/      ← knowledge base: db, embedder, retriever (shared read layer)
 │   └── data/
-│       └── brokers/ ← pure data clients (no MCP coupling)
+│       └── brokers/    ← pure data clients (no MCP coupling)
 │
-├── signals/         ← (future) trade signals MCP server — imports shared/
-├── portfolio/       ← (future) portfolio MCP server — imports shared/
-└── ...              ← future purpose-built MCP servers
+├── knowledge/          ← knowledge MCP server (ingestion + search tools, port 8002)
+├── signals/            ← (future) trade signals MCP server — imports shared/
+├── portfolio/          ← (future) portfolio MCP server — imports shared/
+└── ...                 ← future purpose-built MCP servers
 ```
 
-MCP clients (Claude Desktop, Cursor, Zed, etc.) connect to top-level MCP servers, not directly to `shared/transport.py` in production. Today `shared/transport.py` works as a complete market data server.
+MCP clients (Claude Desktop, Cursor, Zed, etc.) connect to top-level MCP servers. `shared/` is a library — the top-level servers import from it and define their own tools.
 
 ---
 
@@ -184,7 +186,11 @@ Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
 
 ```
 finance/
-└── shared/
+├── knowledge/                    # Knowledge MCP server (port 8002)
+│   ├── server.py                 # FastMCP — ingest + search tools
+│   └── ingest.py                 # Claude-powered chunking + categorization
+│
+└── shared/                       # Foundation library
     ├── transport.py              # Standalone market data MCP server + importable utilities
     ├── auth/
     │   ├── server.py             # Standalone OAuth 2.1 server (port 8001)
@@ -193,10 +199,14 @@ finance/
     │   ├── tokens.py             # JWT access tokens + refresh token rotation
     │   ├── middleware.py         # Bearer token validator for MCP servers
     │   └── README.md             # Cloud deployment guide
+    ├── knowledge/
+    │   ├── db.py                 # asyncpg pool, knowledge schema, pgvector init
+    │   ├── embedder.py           # OpenRouter embedder (text-embedding-3-large)
+    │   └── retriever.py          # KnowledgeRetriever — search, get_by_category, etc.
     └── data/
         └── brokers/
             ├── tastytrade.py     # TastytradeClient — pure data client, no MCP coupling
             └── yahoo.py          # YahooClient — pure data client, no MCP coupling
 ```
 
-`shared/data/brokers/` — self-contained data clients with no MCP dependencies. `shared/transport.py` instantiates both clients, defines all tools, and wires up the `_with_fallback` helper. Future top-level MCP servers import `TastytradeClient`, `YahooClient`, and `_with_fallback` from `shared/` and define their own tool sets.
+`shared/knowledge/` is the read layer — any future MCP server imports `KnowledgeRetriever` to query the knowledge base. Only `knowledge/server.py` handles ingestion (the write side).
