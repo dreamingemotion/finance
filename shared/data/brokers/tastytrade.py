@@ -1,24 +1,20 @@
 """
-Self-contained Tastytrade data grabber.
+Tastytrade data client.
 
-Includes auth, HTTP client, DXLink WebSocket streamer, Pydantic models,
-and MCP tool registration. Call register_tools(mcp) from transport.py.
+Pure data client — no MCP coupling. Pass credentials to TastytradeClient directly.
 
-Required environment variables:
-    TT_CLIENT_ID       — OAuth2 client ID
-    TT_CLIENT_SECRET   — OAuth2 client secret
-    TT_REFRESH_TOKEN   — OAuth2 refresh token (never expires)
+Required: client_id, client_secret, refresh_token (OAuth2 credentials from
+the Tastytrade developer portal under Settings → API / OAuth Applications).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, AsyncGenerator, ClassVar, Iterable
+from typing import Any, AsyncGenerator, ClassVar
 
 import httpx
 from pydantic import BaseModel, Field, field_validator
@@ -63,7 +59,7 @@ class TastytradeStreamError(TastytradeError):
 # Auth — OAuth2 refresh-token grant, auto-renews 60 s before expiry
 # ---------------------------------------------------------------------------
 
-class TastytradeAuth:
+class _Auth:
     def __init__(self, client_id: str, client_secret: str, refresh_token: str) -> None:
         self._client_id = client_id
         self._client_secret = client_secret
@@ -100,11 +96,11 @@ class TastytradeAuth:
 
 
 # ---------------------------------------------------------------------------
-# HTTP Client
+# HTTP Client (internal)
 # ---------------------------------------------------------------------------
 
-class TastytradeClient:
-    def __init__(self, auth: TastytradeAuth) -> None:
+class _Client:
+    def __init__(self, auth: _Auth) -> None:
         self._auth = auth
         self._http = httpx.AsyncClient(base_url=_BASE_URL, timeout=30.0)
 
@@ -121,7 +117,7 @@ class TastytradeClient:
     async def aclose(self) -> None:
         await self._http.aclose()
 
-    async def __aenter__(self) -> "TastytradeClient":
+    async def __aenter__(self) -> "_Client":
         return self
 
     async def __aexit__(self, *_: Any) -> None:
@@ -641,7 +637,7 @@ class DXLinkStreamer:
       6. KEEPALIVE every 30 s on channel 0
     """
 
-    def __init__(self, client: TastytradeClient) -> None:
+    def __init__(self, client: _Client) -> None:
         self._client = client
         self._ws: Any = None
         self._dxlink_url: str = ""
@@ -922,47 +918,31 @@ class DXLinkStreamer:
 
 
 # ---------------------------------------------------------------------------
-# MCP tool registration
+# Public client
 # ---------------------------------------------------------------------------
 
-def register_tools(mcp: Any, fallbacks: dict | None = None) -> None:
+class TastytradeClient:
     """
-    Register all Tastytrade MCP tools on the provided FastMCP instance.
+    Tastytrade data client.
 
-    Reads TT_CLIENT_ID, TT_CLIENT_SECRET, TT_REFRESH_TOKEN from the environment.
-    Each tool creates an httpx client for its request and closes it on completion.
-    The TastytradeAuth instance is shared and caches access tokens across calls.
-
-    fallbacks: optional dict of tool_name → callable (from yahoo.build_fallback_fns()).
-    When provided, each eligible tool falls back to the Yahoo equivalent on failure
-    and includes a "_note" field indicating delayed data.
+    Instantiate once and reuse — auth tokens are cached and refreshed automatically.
     """
-    auth = TastytradeAuth(
-        client_id=os.environ["TT_CLIENT_ID"],
-        client_secret=os.environ["TT_CLIENT_SECRET"],
-        refresh_token=os.environ["TT_REFRESH_TOKEN"],
-    )
 
-    # ---- Market Data -------------------------------------------------------
+    def __init__(self, client_id: str, client_secret: str, refresh_token: str) -> None:
+        self._auth = _Auth(client_id, client_secret, refresh_token)
 
-    @mcp.tool()
-    async def tt_get_quote(symbol: str, instrument_type: str) -> dict:
-        """
-        Get a snapshot quote for a single instrument.
+    def _new_client(self) -> _Client:
+        return _Client(self._auth)
 
-        instrument_type: equity | equity-option | future | future-option | cryptocurrency | index
-        """
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get(f"/market-data/{instrument_type}/{symbol}")
-            return MarketData.model_validate(resp["data"]).model_dump(mode="json")
-        except Exception:
-            if fallbacks and "tt_get_quote" in fallbacks:
-                return fallbacks["tt_get_quote"](symbol, instrument_type)
-            raise
+    # ---- Shared methods (primary side of TT/YF fallback pair) ----
 
-    @mcp.tool()
-    async def tt_get_quotes_by_type(
+    async def get_quote(self, symbol: str, instrument_type: str = "equity") -> dict:
+        async with self._new_client() as c:
+            resp = await c.get(f"/market-data/{instrument_type}/{symbol}")
+        return MarketData.model_validate(resp["data"]).model_dump(mode="json")
+
+    async def get_quotes(
+        self,
         equities: list[str] | None = None,
         equity_options: list[str] | None = None,
         futures: list[str] | None = None,
@@ -970,11 +950,6 @@ def register_tools(mcp: Any, fallbacks: dict | None = None) -> None:
         cryptocurrencies: list[str] | None = None,
         indices: list[str] | None = None,
     ) -> list[dict]:
-        """
-        Get snapshot quotes for multiple symbols across instrument types in one request.
-
-        Combined symbol limit: 100. Pass lists only for the types you need.
-        """
         type_map = {
             "equity":         equities,
             "equity-option":  equity_options,
@@ -987,185 +962,56 @@ def register_tools(mcp: Any, fallbacks: dict | None = None) -> None:
         for key, syms in type_map.items():
             if syms:
                 params[f"symbols[{key}][]"] = syms
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get("/market-data/by-type", **params)
-            items = resp.get("data", {}).get("items", [])
-            return [MarketData.model_validate(i).model_dump(mode="json") for i in items]
-        except Exception:
-            if fallbacks and "tt_get_quotes_by_type" in fallbacks:
-                return fallbacks["tt_get_quotes_by_type"](
-                    equities, equity_options, futures, future_options, cryptocurrencies, indices
-                )
-            raise
+        async with self._new_client() as c:
+            resp = await c.get("/market-data/by-type", **params)
+        items = resp.get("data", {}).get("items", [])
+        return [MarketData.model_validate(i).model_dump(mode="json") for i in items]
 
-    # ---- Market Metrics ----------------------------------------------------
+    async def get_candles(
+        self,
+        symbols: list[str],
+        period: str = "1d",
+        from_date: str | None = None,
+        duration_seconds: float = 10.0,
+        regular_hours_only: bool = False,
+    ) -> list[dict]:
+        return await self.stream_candles(symbols, period, from_date, duration_seconds, regular_hours_only)
 
-    @mcp.tool()
-    async def tt_get_market_metrics(symbols: list[str]) -> list[dict]:
-        """
-        Get market metrics for one or more symbols: IV rank, IV percentile,
-        historical volatility (30/60/90-day), beta, earnings, dividends, etc.
-        """
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get("/market-metrics", symbols=",".join(symbols))
-            items = resp.get("data", {}).get("items", [])
-            return [MarketMetricInfo.model_validate(i).model_dump(mode="json") for i in items]
-        except Exception:
-            if fallbacks and "tt_get_market_metrics" in fallbacks:
-                return fallbacks["tt_get_market_metrics"](symbols)
-            raise
+    async def get_metrics(self, symbols: list[str]) -> list[dict]:
+        async with self._new_client() as c:
+            resp = await c.get("/market-metrics", symbols=",".join(symbols))
+        items = resp.get("data", {}).get("items", [])
+        return [MarketMetricInfo.model_validate(i).model_dump(mode="json") for i in items]
 
-    @mcp.tool()
-    async def tt_get_dividends(symbol: str) -> list[dict]:
-        """Get historical dividend events for a symbol."""
+    async def get_dividends(self, symbol: str) -> list[dict]:
         encoded = symbol.replace("/", "%2F")
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get(
-                    f"/market-metrics/historic-corporate-events/dividends/{encoded}"
-                )
-            items = resp.get("data", {}).get("items", [])
-            return [DividendInfo.model_validate(i).model_dump(mode="json") for i in items]
-        except Exception:
-            if fallbacks and "tt_get_dividends" in fallbacks:
-                return fallbacks["tt_get_dividends"](symbol)
-            raise
+        async with self._new_client() as c:
+            resp = await c.get(
+                f"/market-metrics/historic-corporate-events/dividends/{encoded}"
+            )
+        items = resp.get("data", {}).get("items", [])
+        return [DividendInfo.model_validate(i).model_dump(mode="json") for i in items]
 
-    @mcp.tool()
-    async def tt_get_earnings(symbol: str, start_date: str | None = None) -> list[dict]:
-        """
-        Get historical earnings reports for a symbol.
-
-        start_date: ISO date string YYYY-MM-DD to filter results on or after that date.
-        """
+    async def get_earnings(self, symbol: str, start_date: str | None = None) -> dict:
         encoded = symbol.replace("/", "%2F")
         params: dict = {}
         if start_date:
             params["start-date"] = start_date
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get(
-                    f"/market-metrics/historic-corporate-events/earnings-reports/{encoded}",
-                    **params,
-                )
-            items = resp.get("data", {}).get("items", [])
-            return [EarningsInfo.model_validate(i).model_dump(mode="json") for i in items]
-        except Exception:
-            if fallbacks and "tt_get_earnings" in fallbacks:
-                return fallbacks["tt_get_earnings"](symbol, start_date)
-            raise
-
-    @mcp.tool()
-    async def tt_get_risk_free_rate() -> str:
-        """Get the current risk-free rate used by tastytrade for margin/options pricing."""
-        async with TastytradeClient(auth) as client:
-            resp = await client.get("/margin-requirements-public-configuration")
-        rate = resp.get("data", {}).get("risk-free-rate", "0")
-        return str(Decimal(str(rate)))
-
-    # ---- Instruments -------------------------------------------------------
-
-    @mcp.tool()
-    async def tt_get_equity(symbol: str) -> dict:
-        """Get a single equity instrument by symbol."""
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/instruments/equities/{symbol}")
-        return Equity.model_validate(resp["data"]).model_dump(mode="json")
-
-    @mcp.tool()
-    async def tt_get_equities(
-        symbols: list[str],
-        lendability: str | None = None,
-        is_index: bool | None = None,
-        is_etf: bool | None = None,
-    ) -> list[dict]:
-        """
-        Get multiple equity instruments.
-
-        lendability: Easy To Borrow | Locate Required | Preborrow
-        """
-        params: dict = {"symbol[]": symbols, "per-page": 250, "page-offset": 0}
-        if lendability is not None:
-            params["lendability"] = lendability
-        if is_index is not None:
-            params["is-index"] = str(is_index).lower()
-        if is_etf is not None:
-            params["is-etf"] = str(is_etf).lower()
-        async with TastytradeClient(auth) as client:
-            resp = await client.get("/instruments/equities", **params)
+        async with self._new_client() as c:
+            resp = await c.get(
+                f"/market-metrics/historic-corporate-events/earnings-reports/{encoded}",
+                **params,
+            )
         items = resp.get("data", {}).get("items", [])
-        return [Equity.model_validate(i).model_dump(mode="json") for i in items]
+        return {
+            "symbol": symbol.upper(),
+            "earnings": [EarningsInfo.model_validate(i).model_dump(mode="json") for i in items],
+        }
 
-    @mcp.tool()
-    async def tt_get_option_chain(underlying_symbol: str) -> dict:
-        """
-        Get the full equity option chain for an underlying.
-
-        Returns a dict keyed by expiration date (YYYY-MM-DD) mapping to
-        a list of option contract dicts.
-        """
-        symbol = underlying_symbol.replace("/", "%2F")
-        try:
-            async with TastytradeClient(auth) as client:
-                resp = await client.get(f"/option-chains/{symbol}")
-            items = resp.get("data", {}).get("items", [])
-            chain: dict[str, list[dict]] = {}
-            for raw in items:
-                opt = Option.model_validate(raw)
-                chain.setdefault(opt.expiration_date.isoformat(), []).append(
-                    opt.model_dump(mode="json")
-                )
-            return chain
-        except Exception:
-            if fallbacks and "tt_get_option_chain" in fallbacks:
-                return fallbacks["tt_get_option_chain"](underlying_symbol)
-            raise
-
-    @mcp.tool()
-    async def tt_get_nested_option_chain(underlying_symbol: str) -> list[dict]:
-        """
-        Get the equity option chain in nested format: expirations → strikes → call/put pairs.
-
-        Cleaner for display than tt_get_option_chain; use the flat version for
-        direct access to all Option objects.
-        """
-        symbol = underlying_symbol.replace("/", "%2F")
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/option-chains/{symbol}/nested")
-        items = resp.get("data", {}).get("items", [])
-        return [NestedOptionChain.model_validate(i).model_dump(mode="json") for i in items]
-
-    @mcp.tool()
-    async def tt_get_futures(
-        symbols: list[str] | None = None,
-        product_codes: list[str] | None = None,
-    ) -> list[dict]:
-        """
-        Get futures contracts, optionally filtered by symbols or product codes (e.g. ES, NQ).
-        """
-        params: dict = {"per-page": 250, "page-offset": 0}
-        if symbols:
-            params["symbol[]"] = symbols
-        if product_codes:
-            params["product-code[]"] = product_codes
-        async with TastytradeClient(auth) as client:
-            resp = await client.get("/instruments/futures", **params)
-        items = resp.get("data", {}).get("items", [])
-        return [Future.model_validate(i).model_dump(mode="json") for i in items]
-
-    @mcp.tool()
-    async def tt_get_future_option_chain(underlying_symbol: str) -> dict:
-        """
-        Get the option chain for a futures underlying.
-
-        Returns a dict keyed by expiration date (YYYY-MM-DD) mapping to
-        a list of option contract dicts.
-        """
-        symbol = underlying_symbol.replace("/", "")
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/futures-option-chains/{symbol}")
+    async def get_option_chain(self, symbol: str) -> dict:
+        encoded = symbol.replace("/", "%2F")
+        async with self._new_client() as c:
+            resp = await c.get(f"/option-chains/{encoded}")
         items = resp.get("data", {}).get("items", [])
         chain: dict[str, list[dict]] = {}
         for raw in items:
@@ -1175,186 +1021,193 @@ def register_tools(mcp: Any, fallbacks: dict | None = None) -> None:
             )
         return chain
 
-    @mcp.tool()
-    async def tt_symbol_search(query: str) -> list[dict]:
-        """Search for symbols matching a query string. Returns symbol and description."""
+    # ---- TT-only methods ----
+
+    async def get_equity(self, symbol: str) -> dict:
+        async with self._new_client() as c:
+            resp = await c.get(f"/instruments/equities/{symbol}")
+        return Equity.model_validate(resp["data"]).model_dump(mode="json")
+
+    async def get_equities(
+        self,
+        symbols: list[str],
+        lendability: str | None = None,
+        is_index: bool | None = None,
+        is_etf: bool | None = None,
+    ) -> list[dict]:
+        params: dict = {"symbol[]": symbols, "per-page": 250, "page-offset": 0}
+        if lendability is not None:
+            params["lendability"] = lendability
+        if is_index is not None:
+            params["is-index"] = str(is_index).lower()
+        if is_etf is not None:
+            params["is-etf"] = str(is_etf).lower()
+        async with self._new_client() as c:
+            resp = await c.get("/instruments/equities", **params)
+        items = resp.get("data", {}).get("items", [])
+        return [Equity.model_validate(i).model_dump(mode="json") for i in items]
+
+    async def get_nested_option_chain(self, symbol: str) -> list[dict]:
+        encoded = symbol.replace("/", "%2F")
+        async with self._new_client() as c:
+            resp = await c.get(f"/option-chains/{encoded}/nested")
+        items = resp.get("data", {}).get("items", [])
+        return [NestedOptionChain.model_validate(i).model_dump(mode="json") for i in items]
+
+    async def get_futures(
+        self,
+        symbols: list[str] | None = None,
+        product_codes: list[str] | None = None,
+    ) -> list[dict]:
+        params: dict = {"per-page": 250, "page-offset": 0}
+        if symbols:
+            params["symbol[]"] = symbols
+        if product_codes:
+            params["product-code[]"] = product_codes
+        async with self._new_client() as c:
+            resp = await c.get("/instruments/futures", **params)
+        items = resp.get("data", {}).get("items", [])
+        return [Future.model_validate(i).model_dump(mode="json") for i in items]
+
+    async def get_future_option_chain(self, symbol: str) -> dict:
+        encoded = symbol.replace("/", "")
+        async with self._new_client() as c:
+            resp = await c.get(f"/futures-option-chains/{encoded}")
+        items = resp.get("data", {}).get("items", [])
+        chain: dict[str, list[dict]] = {}
+        for raw in items:
+            opt = Option.model_validate(raw)
+            chain.setdefault(opt.expiration_date.isoformat(), []).append(
+                opt.model_dump(mode="json")
+            )
+        return chain
+
+    async def get_risk_free_rate(self) -> str:
+        async with self._new_client() as c:
+            resp = await c.get("/margin-requirements-public-configuration")
+        rate = resp.get("data", {}).get("risk-free-rate", "0")
+        return str(Decimal(str(rate)))
+
+    async def symbol_search(self, query: str) -> list[dict]:
         encoded = query.replace("/", "%2F")
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/symbols/search/{encoded}")
+        async with self._new_client() as c:
+            resp = await c.get(f"/symbols/search/{encoded}")
         items = resp.get("data", {}).get("items", [])
         return [SymbolData.model_validate(i).model_dump(mode="json") for i in items]
 
-    # ---- DXLink Streaming --------------------------------------------------
-
-    @mcp.tool()
-    async def tt_stream_quotes(
+    async def stream_quotes(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to live bid/ask quotes for symbols and collect for duration_seconds.
-
-        Returns all Quote events received during the collection window.
-        """
-        try:
-            results: list[dict] = []
-            async with TastytradeClient(auth) as client:
-                async with DXLinkStreamer(client) as streamer:
-                    async for q in streamer.stream(Quote, symbols, timeout=duration_seconds):
-                        results.append(q.model_dump(mode="json"))
-            return results
-        except Exception:
-            if fallbacks and "tt_stream_quotes" in fallbacks:
-                return fallbacks["tt_stream_quotes"](symbols, duration_seconds)
-            raise
-
-    @mcp.tool()
-    async def tt_stream_trades(
-        symbols: list[str],
-        duration_seconds: float = 5.0,
-    ) -> list[dict]:
-        """
-        Subscribe to live trade prints for symbols and collect for duration_seconds.
-
-        Returns all Trade events received during the collection window.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
+                async for q in streamer.stream(Quote, symbols, timeout=duration_seconds):
+                    results.append(q.model_dump(mode="json"))
+        return results
+
+    async def stream_trades(
+        self,
+        symbols: list[str],
+        duration_seconds: float = 5.0,
+    ) -> list[dict]:
+        results: list[dict] = []
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for t in streamer.stream(Trade, symbols, timeout=duration_seconds):
                     results.append(t.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_candles(
+    async def stream_candles(
+        self,
         symbols: list[str],
         period: str = "1d",
         from_date: str | None = None,
         duration_seconds: float = 10.0,
         regular_hours_only: bool = False,
     ) -> list[dict]:
-        """
-        Fetch historical + live OHLCV candles via DXLink.
-
-        period: 1m | 2m | 3m | 5m | 10m | 15m | 30m | 1h | 2h | 4h | 1d | 1w | 1mo
-        from_date: ISO date YYYY-MM-DD; omit for full available history (~2001).
-        duration_seconds: how long to collect after subscribing before returning.
-        regular_hours_only: set True to filter extended-hours bars.
-        """
         from_time_ms: int | None = None
         if from_date:
-            from_time_ms = int(
-                datetime.fromisoformat(from_date).timestamp() * 1000
-            )
-        try:
-            results: list[dict] = []
-            async with TastytradeClient(auth) as client:
-                async with DXLinkStreamer(client) as streamer:
-                    async for c in streamer.stream_candles(
-                        symbols, period, from_time_ms, regular_hours_only,
-                        timeout=duration_seconds,
-                    ):
-                        results.append(c.model_dump(mode="json"))
-            return results
-        except Exception:
-            if fallbacks and "tt_stream_candles" in fallbacks:
-                return fallbacks["tt_stream_candles"](
-                    symbols, period, from_date, duration_seconds, regular_hours_only
-                )
-            raise
+            from_time_ms = int(datetime.fromisoformat(from_date).timestamp() * 1000)
+        results: list[dict] = []
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
+                async for candle in streamer.stream_candles(
+                    symbols, period, from_time_ms, regular_hours_only,
+                    timeout=duration_seconds,
+                ):
+                    results.append(candle.model_dump(mode="json"))
+        return results
 
-    @mcp.tool()
-    async def tt_stream_greeks(
+    async def stream_greeks(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to live Greeks (delta, gamma, theta, vega, rho, IV) for option symbols
-        and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for g in streamer.stream(Greeks, symbols, timeout=duration_seconds):
                     results.append(g.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_summaries(
+    async def stream_summaries(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to Summary events (day OHLC, previous close, open interest) for symbols
-        and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for s in streamer.stream(Summary, symbols, timeout=duration_seconds):
                     results.append(s.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_profiles(
+    async def stream_profiles(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to Profile events (52-week high/low, trading status, halt status, shares)
-        for symbols and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for p in streamer.stream(Profile, symbols, timeout=duration_seconds):
                     results.append(p.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_theo_prices(
+    async def stream_theo_prices(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to TheoPrice events (theoretical price, underlying price, greeks)
-        for option symbols and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for tp in streamer.stream(TheoPrice, symbols, timeout=duration_seconds):
                     results.append(tp.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_time_and_sales(
+    async def stream_time_and_sales(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to time & sales (tick-level trade data) for symbols
-        and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for ts in streamer.stream(TimeAndSale, symbols, timeout=duration_seconds):
                     results.append(ts.model_dump(mode="json"))
         return results
 
-    @mcp.tool()
-    async def tt_stream_underlyings(
+    async def stream_underlyings(
+        self,
         symbols: list[str],
         duration_seconds: float = 5.0,
     ) -> list[dict]:
-        """
-        Subscribe to Underlying events (implied volatility, put/call volumes, put-call ratio)
-        for symbols and collect for duration_seconds.
-        """
         results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
+        async with self._new_client() as c:
+            async with DXLinkStreamer(c) as streamer:
                 async for u in streamer.stream(Underlying, symbols, timeout=duration_seconds):
                     results.append(u.model_dump(mode="json"))
         return results

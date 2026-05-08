@@ -1,6 +1,6 @@
 # finance
 
-MCP server for market data. Currently supports Tastytrade (REST snapshots + DXLink live streaming). Yahoo Finance coming soon.
+MCP server for market data. Tastytrade is the primary source (REST snapshots + DXLink live streaming); Yahoo Finance is the automatic fallback. When the live feed is unavailable, responses include a `_note` field indicating delayed data.
 
 Compatible with any MCP client: Claude Desktop, Cursor, Zed, Continue, or any host that speaks the [Model Context Protocol](https://modelcontextprotocol.io).
 
@@ -114,53 +114,63 @@ Point to the same command in your MCP settings, or use the streamable-http trans
 
 ## Available tools
 
-All Tastytrade tools are prefixed `tt_`.
+### Shared (Tastytrade primary, Yahoo Finance fallback)
 
-### Market data (REST snapshots)
-
-| Tool | Description |
-|------|-------------|
-| `tt_get_quote` | Snapshot quote for a single symbol |
-| `tt_get_quotes_by_type` | Snapshot quotes for multiple symbols across instrument types (limit: 100) |
-
-### Market metrics
+When Tastytrade is unavailable, these tools automatically fall back to Yahoo Finance and include `"_note": "Note: this analysis uses delayed data because the live feed is down."` in the response.
 
 | Tool | Description |
 |------|-------------|
-| `tt_get_market_metrics` | IV rank, IV percentile, HV (30/60/90-day), beta, earnings, dividends |
-| `tt_get_dividends` | Historical dividend events for a symbol |
-| `tt_get_earnings` | Historical earnings reports for a symbol |
-| `tt_get_risk_free_rate` | Current risk-free rate used for margin/options pricing |
+| `get_quote` | Snapshot quote for a single symbol |
+| `get_quotes` | Snapshot quotes for multiple symbols across instrument types (limit: 100) |
+| `get_candles` | OHLCV candles — live DXLink stream with Yahoo Finance fallback |
+| `get_metrics` | IV rank, IV percentile, HV (30/60/90-day), beta, earnings, dividends |
+| `get_dividends` | Historical dividend events for a symbol |
+| `get_earnings` | Earnings history for a symbol |
+| `get_option_chain` | Full equity option chain keyed by expiration date |
 
-### Instruments
+### Tastytrade-only
 
 | Tool | Description |
 |------|-------------|
-| `tt_get_equity` | Single equity instrument details |
-| `tt_get_equities` | Multiple equity instruments |
-| `tt_get_option_chain` | Full equity option chain, keyed by expiration date |
-| `tt_get_nested_option_chain` | Option chain in nested format (expirations → strikes → calls/puts) |
-| `tt_get_futures` | Futures contracts, filterable by symbol or product code |
-| `tt_get_future_option_chain` | Option chain for a futures underlying |
-| `tt_symbol_search` | Search for symbols by name or ticker |
+| `get_equity` | Single equity instrument details |
+| `get_equities` | Multiple equity instruments |
+| `get_nested_option_chain` | Option chain in nested format (expirations → strikes → calls/puts) |
+| `get_futures` | Futures contracts, filterable by symbol or product code |
+| `get_future_option_chain` | Option chain for a futures underlying |
+| `get_risk_free_rate` | Current risk-free rate used for margin/options pricing |
+| `symbol_search` | Search for symbols by name or ticker |
 
-### DXLink streaming
+### DXLink streaming (Tastytrade-only)
 
 Streaming tools open a WebSocket to DXLink, subscribe, collect events for `duration_seconds`, then return the full list.
 
 | Tool | Description |
 |------|-------------|
-| `tt_stream_quotes` | Live bid/ask quotes |
-| `tt_stream_trades` | Live trade prints |
-| `tt_stream_candles` | OHLCV candles — historical backfill + live; configurable period and start date |
-| `tt_stream_greeks` | Live Greeks (delta, gamma, theta, vega, rho, IV) for options |
-| `tt_stream_summaries` | Day OHLC, previous close, open interest |
-| `tt_stream_profiles` | 52-week high/low, trading status, halt status |
-| `tt_stream_theo_prices` | Theoretical price and Greeks for options |
-| `tt_stream_time_and_sales` | Tick-level trade data |
-| `tt_stream_underlyings` | IV, put/call volumes, put-call ratio for underlyings |
+| `stream_quotes` | Live bid/ask quotes |
+| `stream_trades` | Live trade prints |
+| `stream_candles` | OHLCV candles — historical backfill + live; configurable period and start date |
+| `stream_greeks` | Live Greeks (delta, gamma, theta, vega, rho, IV) for options |
+| `stream_summaries` | Day OHLC, previous close, open interest |
+| `stream_profiles` | 52-week high/low, trading status, halt status |
+| `stream_theo_prices` | Theoretical price and Greeks for options |
+| `stream_time_and_sales` | Tick-level trade data |
+| `stream_underlyings` | IV, put/call volumes, put-call ratio for underlyings |
 
 Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
+
+### Yahoo Finance-only
+
+| Tool | Description |
+|------|-------------|
+| `get_info` | Full company profile and fundamentals (PE, EPS, margins, analyst ratings, etc.) |
+| `get_history` | OHLCV price history with yfinance period/interval syntax |
+| `get_financials` | Annual income statement |
+| `get_balance_sheet` | Annual balance sheet |
+| `get_cashflow` | Annual cash flow statement |
+| `get_splits` | Historical stock splits |
+| `get_recommendations` | Analyst buy/sell/hold recommendations |
+| `get_news` | Recent news articles |
+| `get_option_expirations` | Available options expiration dates |
 
 ---
 
@@ -169,11 +179,11 @@ Candle periods: `1m 2m 3m 5m 10m 15m 30m 1h 2h 4h 1d 1w 1mo`
 ```
 finance/
 └── shared/
-    ├── transport.py              # MCP server entry point (stdio or streamable-http)
+    ├── transport.py              # MCP server entry point — owns all tool definitions
     └── data/
         └── brokers/
-            ├── tastytrade.py     # Self-contained Tastytrade data grabber + MCP tools
-            └── yahoo.py          # Coming soon
+            ├── tastytrade.py     # TastytradeClient — pure data client, no MCP coupling
+            └── yahoo.py          # YahooClient — pure data client, no MCP coupling
 ```
 
-Each broker file is self-contained (no shared dependencies between them) and exposes a `register_tools(mcp)` function that `transport.py` calls at startup.
+Each broker file is a self-contained data client with no MCP dependencies. `transport.py` instantiates both clients, defines all tools, and wires up the `_with_fallback` helper for shared tools.
