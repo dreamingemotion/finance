@@ -114,29 +114,7 @@ See [`shared/auth/README.md`](shared/auth/README.md) for the full cloud deployme
 
 Point your MCP client at `shared/transport.py` for local use. Future top-level MCP servers will replace this as they are built.
 
-### Claude Desktop
-
-Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `%APPDATA%\Claude\claude_desktop_config.json` (Windows):
-
-```json
-{
-  "mcpServers": {
-    "finance": {
-      "command": "python",
-      "args": ["C:/path/to/finance/shared/transport.py"],
-      "env": {
-        "TT_CLIENT_ID": "your_client_id",
-        "TT_CLIENT_SECRET": "your_client_secret",
-        "TT_REFRESH_TOKEN": "your_refresh_token"
-      }
-    }
-  }
-}
-```
-
-### Cursor / Zed / Continue
-
-Point to the same command in your MCP settings, or use the SSE transport if running the server separately and configure the URL (e.g. `http://localhost:8000/sse`).
+Client configs will be documented here as top-level MCP servers are built. Each server will have its own entry in `mcpServers` pointing to its own entry point.
 
 ---
 
