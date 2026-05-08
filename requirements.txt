@@ -3,3 +3,9 @@ httpx
 pydantic
 websockets
 yfinance
+fastapi
+uvicorn[standard]
+PyJWT
+passlib[bcrypt]
+asyncpg
+anyio

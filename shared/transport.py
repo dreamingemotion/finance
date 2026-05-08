@@ -5,18 +5,22 @@ Aggregates tools from TastytradeClient (primary) and YahooClient (fallback)
 and starts the server with the configured transport.
 
 Usage:
-    # stdio (default — for Claude Desktop, Cursor, Zed, etc.)
+    # stdio (default — for Claude Desktop local, Cursor, Zed, etc.)
     python transport.py
 
-    # Streamable HTTP (for remote/networked clients)
-    python transport.py --transport streamable-http
-    python transport.py --transport streamable-http --host 0.0.0.0 --port 8000 --path /mcp
+    # SSE HTTP (for remote/cloud clients)
+    python transport.py --transport sse
+    python transport.py --transport sse --host 0.0.0.0 --port 8000
+
+    # SSE HTTP with OAuth 2.1 token validation
+    python transport.py --transport sse --require-auth
 
 Environment variables:
-    TT_CLIENT_ID, TT_CLIENT_SECRET, TT_REFRESH_TOKEN
+  Tastytrade:  TT_CLIENT_ID, TT_CLIENT_SECRET, TT_REFRESH_TOKEN
+  Auth (opt):  JWT_SECRET, AUTH_SERVER_URL
 
 Dependencies:
-    pip install mcp httpx pydantic websockets yfinance
+    pip install -r requirements.txt
 """
 
 from __future__ import annotations
@@ -25,6 +29,9 @@ import argparse
 import os
 import sys
 from pathlib import Path
+
+import anyio
+import uvicorn
 
 # Allow imports from this directory when run as a script
 sys.path.insert(0, str(Path(__file__).parent))
@@ -310,25 +317,28 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Finance MCP server")
     parser.add_argument(
         "--transport",
-        choices=["stdio", "streamable-http"],
+        choices=["stdio", "sse"],
         default="stdio",
         help="Transport mode (default: stdio)",
     )
     parser.add_argument(
         "--host",
         default="0.0.0.0",
-        help="Bind host for streamable-http transport (default: 0.0.0.0)",
+        help="Bind host for SSE transport (default: 0.0.0.0)",
     )
     parser.add_argument(
         "--port",
         type=int,
         default=8000,
-        help="Bind port for streamable-http transport (default: 8000)",
+        help="Bind port for SSE transport (default: 8000)",
     )
     parser.add_argument(
-        "--path",
-        default="/mcp",
-        help="URL path for streamable-http transport (default: /mcp)",
+        "--require-auth",
+        action="store_true",
+        help=(
+            "Validate Bearer JWT tokens on every request. "
+            "Requires JWT_SECRET and AUTH_SERVER_URL env vars."
+        ),
     )
     args = parser.parse_args()
 
@@ -336,13 +346,49 @@ def main() -> None:
 
     if args.transport == "stdio":
         mcp.run(transport="stdio")
-    else:
-        mcp.run(
-            transport="streamable-http",
-            host=args.host,
-            port=args.port,
-            path=args.path,
-        )
+        return
+
+    # SSE transport
+    mcp.settings.host = args.host
+    mcp.settings.port = args.port
+
+    if not args.require_auth:
+        mcp.run(transport="sse")
+        return
+
+    # ---- Auth-protected SSE ------------------------------------------------
+    from starlette.applications import Starlette
+    from starlette.requests import Request as StarletteRequest
+    from starlette.responses import JSONResponse
+    from starlette.routing import Mount, Route
+
+    from auth.middleware import BearerTokenMiddleware
+
+    jwt_secret = os.environ["JWT_SECRET"]
+    auth_url = os.environ["AUTH_SERVER_URL"].rstrip("/")
+
+    async def oauth_discovery(request: StarletteRequest):
+        return JSONResponse({
+            "issuer": auth_url,
+            "authorization_endpoint": f"{auth_url}/authorize",
+            "token_endpoint": f"{auth_url}/token",
+            "revocation_endpoint": f"{auth_url}/revoke",
+            "response_types_supported": ["code"],
+            "grant_types_supported": ["authorization_code", "refresh_token"],
+            "code_challenge_methods_supported": ["S256"],
+            "token_endpoint_auth_methods_supported": ["none"],
+            "scopes_supported": ["mcp"],
+        })
+
+    app = Starlette(routes=[
+        Route("/.well-known/oauth-authorization-server", oauth_discovery),
+        Mount("/", app=mcp.sse_app()),
+    ])
+    app.add_middleware(BearerTokenMiddleware, jwt_secret=jwt_secret)
+
+    config = uvicorn.Config(app, host=args.host, port=args.port, log_level="info")
+    server = uvicorn.Server(config)
+    anyio.run(server.serve)
 
 
 if __name__ == "__main__":
