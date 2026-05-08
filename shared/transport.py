@@ -31,13 +31,13 @@ sys.path.insert(0, str(Path(__file__).parent))
 from mcp.server.fastmcp import FastMCP
 
 from data.brokers.tastytrade import register_tools as tt_register_tools
-# from data.brokers.yahoo import register_tools as yf_register_tools  # future
+from data.brokers.yahoo import build_fallback_fns, register_tools as yf_register_tools
 
 
 def build_server() -> FastMCP:
     mcp = FastMCP("finance-data")
-    tt_register_tools(mcp)
-    # yf_register_tools(mcp)  # uncomment when yahoo.py is ready
+    tt_register_tools(mcp, fallbacks=build_fallback_fns())
+    yf_register_tools(mcp)
     return mcp
 
 

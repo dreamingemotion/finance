@@ -925,13 +925,17 @@ class DXLinkStreamer:
 # MCP tool registration
 # ---------------------------------------------------------------------------
 
-def register_tools(mcp: Any) -> None:
+def register_tools(mcp: Any, fallbacks: dict | None = None) -> None:
     """
     Register all Tastytrade MCP tools on the provided FastMCP instance.
 
     Reads TT_CLIENT_ID, TT_CLIENT_SECRET, TT_REFRESH_TOKEN from the environment.
     Each tool creates an httpx client for its request and closes it on completion.
     The TastytradeAuth instance is shared and caches access tokens across calls.
+
+    fallbacks: optional dict of tool_name → callable (from yahoo.build_fallback_fns()).
+    When provided, each eligible tool falls back to the Yahoo equivalent on failure
+    and includes a "_note" field indicating delayed data.
     """
     auth = TastytradeAuth(
         client_id=os.environ["TT_CLIENT_ID"],
@@ -948,9 +952,14 @@ def register_tools(mcp: Any) -> None:
 
         instrument_type: equity | equity-option | future | future-option | cryptocurrency | index
         """
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/market-data/{instrument_type}/{symbol}")
-        return MarketData.model_validate(resp["data"]).model_dump(mode="json")
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get(f"/market-data/{instrument_type}/{symbol}")
+            return MarketData.model_validate(resp["data"]).model_dump(mode="json")
+        except Exception:
+            if fallbacks and "tt_get_quote" in fallbacks:
+                return fallbacks["tt_get_quote"](symbol, instrument_type)
+            raise
 
     @mcp.tool()
     async def tt_get_quotes_by_type(
@@ -978,10 +987,17 @@ def register_tools(mcp: Any) -> None:
         for key, syms in type_map.items():
             if syms:
                 params[f"symbols[{key}][]"] = syms
-        async with TastytradeClient(auth) as client:
-            resp = await client.get("/market-data/by-type", **params)
-        items = resp.get("data", {}).get("items", [])
-        return [MarketData.model_validate(i).model_dump(mode="json") for i in items]
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get("/market-data/by-type", **params)
+            items = resp.get("data", {}).get("items", [])
+            return [MarketData.model_validate(i).model_dump(mode="json") for i in items]
+        except Exception:
+            if fallbacks and "tt_get_quotes_by_type" in fallbacks:
+                return fallbacks["tt_get_quotes_by_type"](
+                    equities, equity_options, futures, future_options, cryptocurrencies, indices
+                )
+            raise
 
     # ---- Market Metrics ----------------------------------------------------
 
@@ -991,21 +1007,31 @@ def register_tools(mcp: Any) -> None:
         Get market metrics for one or more symbols: IV rank, IV percentile,
         historical volatility (30/60/90-day), beta, earnings, dividends, etc.
         """
-        async with TastytradeClient(auth) as client:
-            resp = await client.get("/market-metrics", symbols=",".join(symbols))
-        items = resp.get("data", {}).get("items", [])
-        return [MarketMetricInfo.model_validate(i).model_dump(mode="json") for i in items]
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get("/market-metrics", symbols=",".join(symbols))
+            items = resp.get("data", {}).get("items", [])
+            return [MarketMetricInfo.model_validate(i).model_dump(mode="json") for i in items]
+        except Exception:
+            if fallbacks and "tt_get_market_metrics" in fallbacks:
+                return fallbacks["tt_get_market_metrics"](symbols)
+            raise
 
     @mcp.tool()
     async def tt_get_dividends(symbol: str) -> list[dict]:
         """Get historical dividend events for a symbol."""
         encoded = symbol.replace("/", "%2F")
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(
-                f"/market-metrics/historic-corporate-events/dividends/{encoded}"
-            )
-        items = resp.get("data", {}).get("items", [])
-        return [DividendInfo.model_validate(i).model_dump(mode="json") for i in items]
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get(
+                    f"/market-metrics/historic-corporate-events/dividends/{encoded}"
+                )
+            items = resp.get("data", {}).get("items", [])
+            return [DividendInfo.model_validate(i).model_dump(mode="json") for i in items]
+        except Exception:
+            if fallbacks and "tt_get_dividends" in fallbacks:
+                return fallbacks["tt_get_dividends"](symbol)
+            raise
 
     @mcp.tool()
     async def tt_get_earnings(symbol: str, start_date: str | None = None) -> list[dict]:
@@ -1018,13 +1044,18 @@ def register_tools(mcp: Any) -> None:
         params: dict = {}
         if start_date:
             params["start-date"] = start_date
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(
-                f"/market-metrics/historic-corporate-events/earnings-reports/{encoded}",
-                **params,
-            )
-        items = resp.get("data", {}).get("items", [])
-        return [EarningsInfo.model_validate(i).model_dump(mode="json") for i in items]
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get(
+                    f"/market-metrics/historic-corporate-events/earnings-reports/{encoded}",
+                    **params,
+                )
+            items = resp.get("data", {}).get("items", [])
+            return [EarningsInfo.model_validate(i).model_dump(mode="json") for i in items]
+        except Exception:
+            if fallbacks and "tt_get_earnings" in fallbacks:
+                return fallbacks["tt_get_earnings"](symbol, start_date)
+            raise
 
     @mcp.tool()
     async def tt_get_risk_free_rate() -> str:
@@ -1076,16 +1107,21 @@ def register_tools(mcp: Any) -> None:
         a list of option contract dicts.
         """
         symbol = underlying_symbol.replace("/", "%2F")
-        async with TastytradeClient(auth) as client:
-            resp = await client.get(f"/option-chains/{symbol}")
-        items = resp.get("data", {}).get("items", [])
-        chain: dict[str, list[dict]] = {}
-        for raw in items:
-            opt = Option.model_validate(raw)
-            chain.setdefault(opt.expiration_date.isoformat(), []).append(
-                opt.model_dump(mode="json")
-            )
-        return chain
+        try:
+            async with TastytradeClient(auth) as client:
+                resp = await client.get(f"/option-chains/{symbol}")
+            items = resp.get("data", {}).get("items", [])
+            chain: dict[str, list[dict]] = {}
+            for raw in items:
+                opt = Option.model_validate(raw)
+                chain.setdefault(opt.expiration_date.isoformat(), []).append(
+                    opt.model_dump(mode="json")
+                )
+            return chain
+        except Exception:
+            if fallbacks and "tt_get_option_chain" in fallbacks:
+                return fallbacks["tt_get_option_chain"](underlying_symbol)
+            raise
 
     @mcp.tool()
     async def tt_get_nested_option_chain(underlying_symbol: str) -> list[dict]:
@@ -1160,12 +1196,17 @@ def register_tools(mcp: Any) -> None:
 
         Returns all Quote events received during the collection window.
         """
-        results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
-                async for q in streamer.stream(Quote, symbols, timeout=duration_seconds):
-                    results.append(q.model_dump(mode="json"))
-        return results
+        try:
+            results: list[dict] = []
+            async with TastytradeClient(auth) as client:
+                async with DXLinkStreamer(client) as streamer:
+                    async for q in streamer.stream(Quote, symbols, timeout=duration_seconds):
+                        results.append(q.model_dump(mode="json"))
+            return results
+        except Exception:
+            if fallbacks and "tt_stream_quotes" in fallbacks:
+                return fallbacks["tt_stream_quotes"](symbols, duration_seconds)
+            raise
 
     @mcp.tool()
     async def tt_stream_trades(
@@ -1205,15 +1246,22 @@ def register_tools(mcp: Any) -> None:
             from_time_ms = int(
                 datetime.fromisoformat(from_date).timestamp() * 1000
             )
-        results: list[dict] = []
-        async with TastytradeClient(auth) as client:
-            async with DXLinkStreamer(client) as streamer:
-                async for c in streamer.stream_candles(
-                    symbols, period, from_time_ms, regular_hours_only,
-                    timeout=duration_seconds,
-                ):
-                    results.append(c.model_dump(mode="json"))
-        return results
+        try:
+            results: list[dict] = []
+            async with TastytradeClient(auth) as client:
+                async with DXLinkStreamer(client) as streamer:
+                    async for c in streamer.stream_candles(
+                        symbols, period, from_time_ms, regular_hours_only,
+                        timeout=duration_seconds,
+                    ):
+                        results.append(c.model_dump(mode="json"))
+            return results
+        except Exception:
+            if fallbacks and "tt_stream_candles" in fallbacks:
+                return fallbacks["tt_stream_candles"](
+                    symbols, period, from_date, duration_seconds, regular_hours_only
+                )
+            raise
 
     @mcp.tool()
     async def tt_stream_greeks(

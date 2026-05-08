@@ -2,3 +2,4 @@ mcp
 httpx
 pydantic
 websockets
+yfinance
