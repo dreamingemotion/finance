@@ -88,12 +88,13 @@ OPENROUTER_API_KEY=sk-or-v1-aBcD1234EfGhIjKl5678MnOpQrStUvWx
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 GENERATION_MODEL=anthropic/claude-sonnet-4-6
 EMBEDDING_MODEL=openai/text-embedding-3-large
-MCP_HOST=0.0.0.0
-MCP_PORT=8092
+KNOWLEDGE_HOST=0.0.0.0
+KNOWLEDGE_PORT=8092
 
-# Required only if running with --require-auth (same value as auth server)
+# Required only if running with --require-auth
+KNOWLEDGE_URL=https://mcp.unfolding.in/servers/finance/knowledge
 JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
-AUTH_SERVER_URL=https://finance.example.com:8090
+AUTH_SERVER_URL=https://mcp.unfolding.in/servers/finance/auth
 ```
 
 ### 3. Install dependencies
@@ -155,9 +156,10 @@ sudo systemctl start finance-knowledge
 
 ### Nginx reverse proxy
 
-Add this location block to your nginx server config (alongside the existing agent blocks):
+Add both blocks to your nginx server config:
 
 ```nginx
+# Knowledge MCP server
 location /servers/finance/knowledge/ {
     proxy_pass http://127.0.0.1:8092/;
     proxy_http_version 1.1;
@@ -167,9 +169,25 @@ location /servers/finance/knowledge/ {
     proxy_read_timeout 86400;
     chunked_transfer_encoding on;
 }
+
+# Auth server API (authorize, token, revoke)
+location /servers/finance/auth/ {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_buffering off;
+}
+
+# Auth server discovery — RFC 8414 path-insertion URL
+# Claude constructs this from the issuer URL https://mcp.unfolding.in/servers/finance/auth
+location = /.well-known/oauth-authorization-server/servers/finance/auth {
+    proxy_pass http://127.0.0.1:8090/.well-known/oauth-authorization-server;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+}
 ```
 
-Reload nginx after adding the block:
+Reload nginx after adding the blocks:
 ```bash
 sudo nginx -t && sudo systemctl reload nginx
 ```

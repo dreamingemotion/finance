@@ -15,9 +15,9 @@ Environment variables:
   OPENROUTER_BASE_URL     https://openrouter.ai/api/v1 (default)
   GENERATION_MODEL        anthropic/claude-sonnet-4-6 (default)
   EMBEDDING_MODEL         openai/text-embedding-3-large (default)
-  MCP_HOST                bind host (default 0.0.0.0)
-  MCP_PORT                bind port (default 8092)
-  MCP_URL                 public base URL of this server, e.g. https://mcp.unfolding.in/servers/finance/knowledge
+  KNOWLEDGE_HOST          bind host (default 0.0.0.0)
+  KNOWLEDGE_PORT          bind port (default 8092)
+  KNOWLEDGE_URL           public base URL, e.g. https://mcp.unfolding.in/servers/finance/knowledge
   JWT_SECRET              shared with auth server (--require-auth only)
   AUTH_SERVER_URL         public URL of auth server (--require-auth only)
 """
@@ -36,8 +36,8 @@ from shared.knowledge.db import close_pool, get_db, init_db
 from shared.knowledge.retriever import KnowledgeRetriever
 from knowledge.ingest import ingest_document as _ingest
 
-_host = os.getenv("MCP_HOST", "0.0.0.0")
-_port = int(os.getenv("MCP_PORT", "8092"))
+_host = os.getenv("KNOWLEDGE_HOST", "0.0.0.0")
+_port = int(os.getenv("KNOWLEDGE_PORT", "8092"))
 
 mcp = FastMCP("finance-knowledge", host=_host, port=_port)
 
@@ -170,7 +170,7 @@ def main() -> None:
 
     jwt_secret = os.environ["JWT_SECRET"]
     auth_url = os.environ["AUTH_SERVER_URL"].rstrip("/")
-    mcp_url = os.environ.get("MCP_URL", "").rstrip("/")
+    mcp_url = os.environ.get("KNOWLEDGE_URL", "").rstrip("/")
     resource_metadata_url = f"{mcp_url}/.well-known/oauth-protected-resource" if mcp_url else ""
 
     @asynccontextmanager
