@@ -6,7 +6,6 @@ yfinance
 fastapi
 uvicorn[standard]
 PyJWT
-passlib[bcrypt]
 asyncpg
 anyio
 openai

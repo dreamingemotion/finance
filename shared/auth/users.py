@@ -3,16 +3,22 @@ from __future__ import annotations
 import secrets
 import time
 
-from passlib.context import CryptContext
+import bcrypt
 
-_pwd = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def _hash(password: str) -> str:
+    return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
+
+
+def verify_password(plain: str, hashed: str) -> bool:
+    return bcrypt.checkpw(plain.encode(), hashed.encode())
 
 
 async def create_user(db, email: str, password: str) -> dict:
     uid = secrets.token_hex(16)
     await db.execute(
         "INSERT INTO users (id, email, password_hash, created_at) VALUES ($1, $2, $3, $4)",
-        uid, email.lower(), _pwd.hash(password), int(time.time()),
+        uid, email.lower(), _hash(password), int(time.time()),
     )
     return {"id": uid, "email": email.lower()}
 
@@ -31,7 +37,3 @@ async def get_user_by_id(db, user_id: str) -> dict | None:
         user_id,
     )
     return dict(row) if row else None
-
-
-def verify_password(plain: str, hashed: str) -> bool:
-    return _pwd.verify(plain, hashed)
