@@ -7,7 +7,7 @@ discrete insight units using Claude, embeds them with `text-embedding-3-large`, 
 everything in Postgres with pgvector. Future analysis sessions query the knowledge base
 via semantic similarity and category filters.
 
-Runs on port 8092. Shares the same OAuth infrastructure as the market data server (port 8091).
+Runs on port 8092. Shares the same OAuth infrastructure as the auth server (port 8090).
 
 ---
 
@@ -88,8 +88,10 @@ OPENROUTER_API_KEY=sk-or-v1-aBcD1234EfGhIjKl5678MnOpQrStUvWx
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 GENERATION_MODEL=anthropic/claude-sonnet-4-6
 EMBEDDING_MODEL=openai/text-embedding-3-large
+MCP_HOST=0.0.0.0
+MCP_PORT=8092
 
-# Required only if running with --require-auth (same value as auth + market data servers)
+# Required only if running with --require-auth (same value as auth server)
 JWT_SECRET=a3f8c2d1e4b7f9e0c3d5a8b2f6e1c4d7a9b3f0e2c5d8a1b4f7e0c3d6a9b2f5
 AUTH_SERVER_URL=https://finance.example.com:8090
 ```
@@ -97,7 +99,7 @@ AUTH_SERVER_URL=https://finance.example.com:8090
 ### 3. Install dependencies
 
 ```bash
-cd /path/to/finance
+cd /opt/agents/finance
 source .venv/bin/activate    # or create venv first — see shared/auth/README.md
 pip install -r requirements.txt
 ```
@@ -109,20 +111,20 @@ pip install -r requirements.txt
 ### Locally (stdio — for Claude Desktop)
 
 ```bash
-cd /path/to/finance
+cd /opt/agents/finance
 python -m knowledge.server
 ```
 
-### SSE without auth (development)
+### Streamable-HTTP without auth (development)
 
 ```bash
-python -m knowledge.server --transport sse --port 8092
+python -m knowledge.server --transport streamable-http
 ```
 
-### SSE with OAuth (recommended for cloud)
+### Streamable-HTTP with OAuth (recommended for cloud)
 
 ```bash
-python -m knowledge.server --transport sse --port 8092 --require-auth
+python -m knowledge.server --transport streamable-http --require-auth
 ```
 
 ### Systemd service
@@ -135,8 +137,8 @@ After=network.target postgresql.service finance-auth.service
 
 [Service]
 User=ubuntu
-WorkingDirectory=/path/to/finance
-ExecStart=/path/to/finance/.venv/bin/python -m knowledge.server --transport sse --port 8092 --require-auth
+WorkingDirectory=/opt/agents/finance
+ExecStart=/opt/agents/finance/.venv/bin/python -m knowledge.server --transport streamable-http --require-auth
 EnvironmentFile=/etc/finance.env
 Restart=always
 
@@ -151,16 +153,47 @@ sudo systemctl enable finance-knowledge
 sudo systemctl start finance-knowledge
 ```
 
+### Nginx reverse proxy
+
+Add this location block to your nginx server config (alongside the existing agent blocks):
+
+```nginx
+location /servers/finance/knowledge/ {
+    proxy_pass http://127.0.0.1:8092/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection '';
+    proxy_buffering off;
+    proxy_read_timeout 86400;
+    chunked_transfer_encoding on;
+}
+```
+
+Reload nginx after adding the block:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+## Connecting to Claude web
+
+Once the server is running and nginx is configured, add it to Claude web as a remote MCP server:
+
+**URL:** `https://mcp.unfolding.in/servers/finance/knowledge/mcp`
+
+Claude will prompt you to authenticate via the OAuth flow on first connection. After that, all 7 tools are available in every conversation.
+
 ---
 
 ## Authentication
 
-The knowledge server uses the same OAuth 2.1 infrastructure as the market data server.
+The knowledge server uses the same OAuth 2.1 infrastructure as the auth server.
 Both share `JWT_SECRET` — a valid token from the auth server works on both.
 
 Without `--require-auth`: no authentication, suitable for local/stdio use.
-With `--require-auth`: Bearer JWT required on every request. The auth server at port 8001
-issues tokens via the same login flow.
+With `--require-auth`: Bearer JWT required on every request. The auth server at port 8090
+issues tokens via the standard OAuth 2.1 login flow.
 
 See [`shared/auth/README.md`](../shared/auth/README.md) for the full OAuth setup guide.
 
