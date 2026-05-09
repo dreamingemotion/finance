@@ -106,6 +106,21 @@ async def init_db() -> None:
             ALTER TABLE knowledge.documents
             ADD COLUMN IF NOT EXISTS uploaded_by TEXT;
         """)
+        # Fix: column was incorrectly migrated to INTEGER; cast back to TEXT.
+        await conn.execute("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'knowledge'
+                      AND table_name   = 'documents'
+                      AND column_name  = 'uploaded_by'
+                      AND data_type    = 'integer'
+                ) THEN
+                    ALTER TABLE knowledge.documents
+                    ALTER COLUMN uploaded_by TYPE TEXT USING uploaded_by::TEXT;
+                END IF;
+            END $$;
+        """)
         await conn.execute("""
             DO $$ BEGIN
                 IF NOT EXISTS (
