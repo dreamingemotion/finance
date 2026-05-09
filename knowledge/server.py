@@ -17,6 +17,7 @@ Environment variables:
   EMBEDDING_MODEL         openai/text-embedding-3-large (default)
   MCP_HOST                bind host (default 0.0.0.0)
   MCP_PORT                bind port (default 8092)
+  MCP_URL                 public base URL of this server, e.g. https://mcp.unfolding.in/servers/finance/knowledge
   JWT_SECRET              shared with auth server (--require-auth only)
   AUTH_SERVER_URL         public URL of auth server (--require-auth only)
 """
@@ -169,33 +170,32 @@ def main() -> None:
 
     jwt_secret = os.environ["JWT_SECRET"]
     auth_url = os.environ["AUTH_SERVER_URL"].rstrip("/")
+    mcp_url = os.environ.get("MCP_URL", "").rstrip("/")
+    resource_metadata_url = f"{mcp_url}/.well-known/oauth-protected-resource" if mcp_url else ""
 
     @asynccontextmanager
     async def lifespan(app):
         yield
         await close_pool()
 
-    async def oauth_discovery(request: StarletteRequest):
+    async def protected_resource_metadata(request: StarletteRequest):
         return JSONResponse({
-            "issuer": auth_url,
-            "authorization_endpoint": f"{auth_url}/authorize",
-            "token_endpoint": f"{auth_url}/token",
-            "revocation_endpoint": f"{auth_url}/revoke",
-            "response_types_supported": ["code"],
-            "grant_types_supported": ["authorization_code", "refresh_token"],
-            "code_challenge_methods_supported": ["S256"],
-            "token_endpoint_auth_methods_supported": ["none"],
-            "scopes_supported": ["mcp"],
+            "resource": f"{mcp_url}/mcp",
+            "authorization_servers": [auth_url],
         })
 
     app = Starlette(
         lifespan=lifespan,
         routes=[
-            Route("/.well-known/oauth-authorization-server", oauth_discovery),
+            Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
             Mount("/", app=mcp.streamable_http_app()),
         ],
     )
-    app.add_middleware(BearerTokenMiddleware, jwt_secret=jwt_secret)
+    app.add_middleware(
+        BearerTokenMiddleware,
+        jwt_secret=jwt_secret,
+        resource_metadata_url=resource_metadata_url,
+    )
 
     config = uvicorn.Config(app, host=_host, port=_port, log_level="info")
     server = uvicorn.Server(config)

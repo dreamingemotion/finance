@@ -15,15 +15,21 @@ from starlette.responses import JSONResponse
 
 # These paths are served without a token so MCP clients can discover the auth server.
 _OPEN_PATHS = frozenset({
+    "/.well-known/oauth-protected-resource",
     "/.well-known/oauth-authorization-server",
     "/.well-known/openid-configuration",
 })
 
 
 class BearerTokenMiddleware(BaseHTTPMiddleware):
-    def __init__(self, app, jwt_secret: str) -> None:
+    def __init__(self, app, jwt_secret: str, resource_metadata_url: str = "") -> None:
         super().__init__(app)
         self._secret = jwt_secret
+        self._www_auth = (
+            f'Bearer resource_metadata="{resource_metadata_url}", scope="mcp"'
+            if resource_metadata_url
+            else 'Bearer realm="Finance MCP"'
+        )
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in _OPEN_PATHS:
@@ -34,7 +40,7 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
             return JSONResponse(
                 {"error": "unauthorized", "error_description": "Bearer token required"},
                 status_code=401,
-                headers={"WWW-Authenticate": 'Bearer realm="Finance MCP"'},
+                headers={"WWW-Authenticate": self._www_auth},
             )
 
         token = auth[7:]
