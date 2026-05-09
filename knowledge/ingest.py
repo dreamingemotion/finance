@@ -1,8 +1,12 @@
 """
 Document ingestion pipeline.
 
-Calls Claude via OpenRouter to extract discrete insight chunks from an article,
-then embeds each chunk and stores everything atomically in the knowledge schema.
+Calls Claude via OpenRouter in two parallel passes:
+  1. Factual pass  — discrete claims, data points, and observations
+  2. Inference pass — methodologies, causal chains, comparisons, non-obvious inferences
+
+Both sets of chunks are embedded in a single batched call and stored atomically
+under the same document ID.
 
 Environment variables:
   OPENROUTER_API_KEY  your OpenRouter API key
@@ -10,6 +14,7 @@ Environment variables:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 
@@ -18,7 +23,7 @@ from openai import AsyncOpenAI
 from shared.knowledge.db import SEEDED_CATEGORIES
 from shared.knowledge.embedder import embed
 
-_SYSTEM_PROMPT = """\
+_FACTUAL_SYSTEM_PROMPT = """\
 You are a financial research analyst extracting investment insights from articles.
 
 Extract discrete, self-contained insight units — each a specific claim, data point, \
@@ -34,12 +39,40 @@ Rules:
 Respond with a JSON array only — no explanation, no markdown fences:
 [{"content": "...", "categories": ["cat1", "cat2"]}]"""
 
+_INFERENCE_SYSTEM_PROMPT = """\
+You are a financial research analyst performing deep inference on articles.
 
-async def _extract_chunks(content: str, title: str) -> list[dict]:
-    client = AsyncOpenAI(
+Read the article and extract higher-order insights that go beyond the stated facts. \
+Focus on four types:
+1. Analytical methodologies — frameworks, models, or approaches used or referenced
+2. Causal chains — if-then sequences implied by the analysis \
+   (e.g. "rising rates → spread compression → credit selloff")
+3. Explicit comparisons — what direct comparisons in the article reveal about \
+   relative value, risk, or positioning
+4. Non-obvious investable inferences — conclusions not stated directly but \
+   logically implied by the data or argument
+
+Rules:
+- Each insight must be self-contained and independently understandable
+- Preserve specific numbers, entities, and relationships
+- Always include "methodology" for type-1 insights; always include "inference" \
+  for types 2-4
+- Add 1-2 extra categories from the provided list when clearly relevant
+- Do not repeat facts already obvious from the text — synthesize and infer
+
+Respond with a JSON array only — no explanation, no markdown fences:
+[{"content": "...", "categories": ["inference"]}]"""
+
+
+def _make_client() -> AsyncOpenAI:
+    return AsyncOpenAI(
         api_key=os.environ["OPENROUTER_API_KEY"],
         base_url=os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
     )
+
+
+async def _extract(system_prompt: str, content: str, title: str) -> list[dict]:
+    client = _make_client()
     model = os.environ.get("GENERATION_MODEL", "anthropic/claude-sonnet-4-6")
     category_list = ", ".join(SEEDED_CATEGORIES.keys())
 
@@ -47,7 +80,7 @@ async def _extract_chunks(content: str, title: str) -> list[dict]:
         model=model,
         temperature=0.1,
         messages=[
-            {"role": "system", "content": _SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {
                 "role": "user",
                 "content": (
@@ -73,17 +106,30 @@ async def ingest_document(
 ) -> dict:
     """
     Full ingestion pipeline:
-      1. Call Claude to extract discrete insight chunks with category assignments
+      1. Run factual and inference extraction passes concurrently
       2. Embed all chunks in a single batched API call
       3. Store document + chunks + categories atomically in a transaction
 
-    Returns a summary: document_id, chunks_stored, new_categories discovered.
+    Returns a summary: document_id, total chunks_stored, per-pass counts,
+    and any new categories discovered.
     """
-    chunks = await _extract_chunks(content, title)
-    if not chunks:
-        return {"document_id": None, "title": title, "chunks_stored": 0, "new_categories": []}
+    factual_chunks, inference_chunks = await asyncio.gather(
+        _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
+        _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
+    )
 
-    vectors = await embed([c["content"] for c in chunks])
+    all_chunks = factual_chunks + inference_chunks
+    if not all_chunks:
+        return {
+            "document_id": None,
+            "title": title,
+            "chunks_stored": 0,
+            "factual_chunks": 0,
+            "inference_chunks": 0,
+            "new_categories": [],
+        }
+
+    vectors = await embed([c["content"] for c in all_chunks])
 
     new_categories: set[str] = set()
 
@@ -97,7 +143,7 @@ async def ingest_document(
             title, source_url, content,
         )
 
-        for chunk_data, vector in zip(chunks, vectors):
+        for chunk_data, vector in zip(all_chunks, vectors):
             vec_str = f"[{','.join(str(v) for v in vector)}]"
 
             chunk_id = await db.fetchval(
@@ -129,6 +175,8 @@ async def ingest_document(
     return {
         "document_id": doc_id,
         "title": title,
-        "chunks_stored": len(chunks),
+        "chunks_stored": len(all_chunks),
+        "factual_chunks": len(factual_chunks),
+        "inference_chunks": len(inference_chunks),
         "new_categories": sorted(new_categories),
     }

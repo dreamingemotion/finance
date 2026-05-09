@@ -30,6 +30,8 @@ SEEDED_CATEGORIES: dict[str, str] = {
     "sector":      "Sector rotation and sector-specific analysis",
     "valuation":   "Valuations: PE ratios, multiples, fair value, spreads",
     "options":     "Options-specific: VIX, implied volatility, skew, positioning",
+    "inference":   "Non-obvious investable inferences, causal chains, and comparisons derived from analysis",
+    "methodology": "Analytical frameworks, models, and methodologies used in the research",
 }
 
 _SCHEMA = """
