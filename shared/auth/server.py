@@ -84,12 +84,36 @@ async def oauth_metadata(request: Request):
         "authorization_endpoint": f"{base}/authorize",
         "token_endpoint": f"{base}/token",
         "revocation_endpoint": f"{base}/revoke",
+        "registration_endpoint": f"{base}/register",
         "response_types_supported": ["code"],
         "grant_types_supported": ["authorization_code", "refresh_token"],
         "code_challenge_methods_supported": ["S256"],
         "token_endpoint_auth_methods_supported": ["none"],
         "scopes_supported": ["mcp"],
     }
+
+
+# ---------------------------------------------------------------------------
+# Dynamic Client Registration  (RFC 7591 — open registration)
+# ---------------------------------------------------------------------------
+
+@app.post("/register")
+async def register_client(request: Request):
+    body = {}
+    try:
+        body = await request.json()
+    except Exception:
+        pass
+    client_id = f"mcp_{secrets.token_urlsafe(16)}"
+    return JSONResponse({
+        "client_id": client_id,
+        "client_id_issued_at": int(time.time()),
+        "redirect_uris": body.get("redirect_uris", []),
+        "grant_types": body.get("grant_types", ["authorization_code", "refresh_token"]),
+        "response_types": body.get("response_types", ["code"]),
+        "token_endpoint_auth_method": "none",
+        "scope": "mcp",
+    }, status_code=201)
 
 
 # ---------------------------------------------------------------------------
