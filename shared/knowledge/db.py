@@ -4,6 +4,8 @@ asyncpg connection pool and schema init for the knowledge store.
 Database: pointed at by KNOWLEDGE_DATABASE_URL (e.g. finance DB on 10.0.0.139)
 Schema:   knowledge — documents, chunks, categories, chunk_categories
 Vector:   pgvector extension, 3072-dim embeddings (text-embedding-3-large)
+          No vector index — pgvector IVFFlat/HNSW top out at 2000 dims; sequential
+          scan is fine for a personal knowledge base (thousands of chunks).
 
 Environment variables:
   KNOWLEDGE_DATABASE_URL  postgresql://user:pass@10.0.0.139:5432/finance
@@ -62,10 +64,6 @@ CREATE TABLE IF NOT EXISTS knowledge.chunk_categories (
     PRIMARY KEY (chunk_id, category)
 );
 
-CREATE INDEX IF NOT EXISTS chunks_embedding_idx
-    ON knowledge.chunks
-    USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
 """
 
 
