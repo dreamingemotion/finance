@@ -122,7 +122,7 @@ async def ingest_document(
     and any new categories discovered.
     """
     content_hash = hashlib.sha256(content.encode()).hexdigest()
-    uploaded_by = get_current_user().get("email")
+    uploaded_by = get_current_user().get("user_id")
 
     existing = await db.fetchrow(
         "SELECT id, title FROM knowledge.documents WHERE content_hash = $1",
