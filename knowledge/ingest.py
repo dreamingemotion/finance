@@ -15,6 +15,7 @@ Environment variables:
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 
@@ -103,16 +104,41 @@ async def ingest_document(
     title: str,
     content: str,
     source_url: str | None = None,
+    overwrite: bool = False,
 ) -> dict:
     """
     Full ingestion pipeline:
-      1. Run factual and inference extraction passes concurrently
-      2. Embed all chunks in a single batched API call
-      3. Store document + chunks + categories atomically in a transaction
+      1. Check for a duplicate by content hash — if found, return duplicate info
+         unless overwrite=True, in which case the existing document is deleted first
+      2. Run factual and inference extraction passes concurrently
+      3. Embed all chunks in a single batched API call
+      4. Store document + chunks + categories atomically in a transaction
 
     Returns a summary: document_id, total chunks_stored, per-pass counts,
     and any new categories discovered.
     """
+    content_hash = hashlib.sha256(content.encode()).hexdigest()
+
+    existing = await db.fetchrow(
+        "SELECT id, title FROM knowledge.documents WHERE content_hash = $1",
+        content_hash,
+    )
+    if existing and not overwrite:
+        return {
+            "duplicate": True,
+            "existing_document_id": existing["id"],
+            "existing_title": existing["title"],
+            "message": (
+                f"This content was already ingested as '{existing['title']}' "
+                f"(id={existing['id']}). Ask the user whether to overwrite or cancel. "
+                f"To overwrite, call ingest_document again with overwrite=True."
+            ),
+        }
+    if existing and overwrite:
+        await db.execute(
+            "DELETE FROM knowledge.documents WHERE id = $1", existing["id"]
+        )
+
     factual_chunks, inference_chunks = await asyncio.gather(
         _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
         _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
@@ -136,11 +162,11 @@ async def ingest_document(
     async with db.transaction():
         doc_id = await db.fetchval(
             """
-            INSERT INTO knowledge.documents (title, source_url, raw_content)
-            VALUES ($1, $2, $3)
+            INSERT INTO knowledge.documents (title, source_url, raw_content, content_hash)
+            VALUES ($1, $2, $3, $4)
             RETURNING id
             """,
-            title, source_url, content,
+            title, source_url, content, content_hash,
         )
 
         for chunk_data, vector in zip(all_chunks, vectors):

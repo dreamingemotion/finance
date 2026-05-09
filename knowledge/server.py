@@ -47,19 +47,23 @@ async def ingest_document(
     title: str,
     content: str,
     source_url: str | None = None,
+    overwrite: bool = False,
 ) -> dict:
     """
     Ingest a document into the knowledge base.
 
-    Extracts discrete insight chunks using Claude, embeds them for semantic
-    search, and stores everything with category tags.
+    Runs two parallel extraction passes (factual + inference), embeds all
+    chunks, and stores everything with category tags.
 
     Call this after reading a file the user has uploaded. Pass the full text
-    as content and a descriptive title. source_url is optional (useful for
-    web articles).
+    as content and a descriptive title. source_url is optional.
+
+    If the content was already ingested, returns {"duplicate": true, ...}
+    with the existing document's id and title. Ask the user whether to
+    overwrite or cancel. If they confirm, call again with overwrite=True.
     """
     async with get_db() as db:
-        return await _ingest(db, title, content, source_url)
+        return await _ingest(db, title, content, source_url, overwrite)
 
 
 @mcp.tool()

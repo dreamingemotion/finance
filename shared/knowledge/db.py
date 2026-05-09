@@ -39,11 +39,12 @@ CREATE EXTENSION IF NOT EXISTS vector;
 CREATE SCHEMA IF NOT EXISTS knowledge;
 
 CREATE TABLE IF NOT EXISTS knowledge.documents (
-    id          SERIAL PRIMARY KEY,
-    title       TEXT NOT NULL,
-    source_url  TEXT,
-    raw_content TEXT NOT NULL,
-    created_at  TIMESTAMPTZ DEFAULT NOW()
+    id           SERIAL PRIMARY KEY,
+    title        TEXT NOT NULL,
+    source_url   TEXT,
+    raw_content  TEXT NOT NULL,
+    content_hash TEXT UNIQUE,
+    created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE IF NOT EXISTS knowledge.categories (
@@ -95,6 +96,22 @@ async def init_db() -> None:
     conn = await asyncpg.connect(os.environ["KNOWLEDGE_DATABASE_URL"])
     try:
         await conn.execute(_SCHEMA)
+        # Migration: add content_hash to existing installs that predate it.
+        await conn.execute("""
+            ALTER TABLE knowledge.documents
+            ADD COLUMN IF NOT EXISTS content_hash TEXT;
+        """)
+        await conn.execute("""
+            DO $$ BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint
+                    WHERE conname = 'documents_content_hash_key'
+                ) THEN
+                    ALTER TABLE knowledge.documents
+                    ADD CONSTRAINT documents_content_hash_key UNIQUE (content_hash);
+                END IF;
+            END $$;
+        """)
         for name, description in SEEDED_CATEGORIES.items():
             await conn.execute(
                 """
