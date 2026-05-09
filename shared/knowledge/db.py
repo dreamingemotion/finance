@@ -44,7 +44,7 @@ CREATE TABLE IF NOT EXISTS knowledge.documents (
     source_url   TEXT,
     raw_content  TEXT NOT NULL,
     content_hash TEXT UNIQUE,
-    uploaded_by  TEXT,
+    uploaded_by  INTEGER,  -- references finance_auth.users.id (cross-db, not enforced)
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -104,7 +104,21 @@ async def init_db() -> None:
         """)
         await conn.execute("""
             ALTER TABLE knowledge.documents
-            ADD COLUMN IF NOT EXISTS uploaded_by TEXT;
+            ADD COLUMN IF NOT EXISTS uploaded_by INTEGER;
+        """)
+        await conn.execute("""
+            DO $$ BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_schema = 'knowledge'
+                      AND table_name   = 'documents'
+                      AND column_name  = 'uploaded_by'
+                      AND data_type    = 'text'
+                ) THEN
+                    ALTER TABLE knowledge.documents
+                    ALTER COLUMN uploaded_by TYPE INTEGER USING uploaded_by::INTEGER;
+                END IF;
+            END $$;
         """)
         await conn.execute("""
             DO $$ BEGIN

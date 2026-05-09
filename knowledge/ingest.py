@@ -122,7 +122,8 @@ async def ingest_document(
     and any new categories discovered.
     """
     content_hash = hashlib.sha256(content.encode()).hexdigest()
-    uploaded_by = get_current_user().get("user_id")
+    _uid = get_current_user().get("user_id")
+    uploaded_by = int(_uid) if _uid is not None else None
 
     existing = await db.fetchrow(
         "SELECT id, title FROM knowledge.documents WHERE content_hash = $1",
