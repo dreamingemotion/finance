@@ -140,6 +140,29 @@ sudo systemctl enable finance-auth
 sudo systemctl start finance-auth
 ```
 
+### Nginx reverse proxy
+
+Add this location block to your nginx server config:
+
+```nginx
+location /servers/finance/auth/ {
+    proxy_pass http://127.0.0.1:8090/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_buffering off;
+}
+```
+
+Then update `AUTH_SERVER_URL` in `/etc/finance.env`:
+```
+AUTH_SERVER_URL=https://mcp.unfolding.in/servers/finance/auth
+```
+
+Reload nginx:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
 Each MCP server has its own systemd service documented in its own README.
 
 ---

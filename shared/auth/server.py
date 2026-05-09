@@ -78,7 +78,7 @@ def _jwt_secret() -> str:
 
 @app.get("/.well-known/oauth-authorization-server")
 async def oauth_metadata(request: Request):
-    base = str(request.base_url).rstrip("/")
+    base = os.environ.get("AUTH_SERVER_URL", str(request.base_url)).rstrip("/")
     return {
         "issuer": base,
         "authorization_endpoint": f"{base}/authorize",
