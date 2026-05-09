@@ -21,6 +21,7 @@ import os
 
 from openai import AsyncOpenAI
 
+from shared.auth.middleware import get_current_user
 from shared.knowledge.db import SEEDED_CATEGORIES
 from shared.knowledge.embedder import embed
 
@@ -54,6 +55,9 @@ Focus on four types:
    logically implied by the data or argument
 
 Rules:
+- Only extract insights that genuinely exist in the material — if the document is \
+  purely factual data (e.g. raw price tables, earnings releases with no commentary) \
+  and none of the four types apply, return an empty array
 - Each insight must be self-contained and independently understandable
 - Preserve specific numbers, entities, and relationships
 - Always include "methodology" for type-1 insights; always include "inference" \
@@ -118,6 +122,7 @@ async def ingest_document(
     and any new categories discovered.
     """
     content_hash = hashlib.sha256(content.encode()).hexdigest()
+    uploaded_by = get_current_user().get("email")
 
     existing = await db.fetchrow(
         "SELECT id, title FROM knowledge.documents WHERE content_hash = $1",
@@ -162,11 +167,11 @@ async def ingest_document(
     async with db.transaction():
         doc_id = await db.fetchval(
             """
-            INSERT INTO knowledge.documents (title, source_url, raw_content, content_hash)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO knowledge.documents (title, source_url, raw_content, content_hash, uploaded_by)
+            VALUES ($1, $2, $3, $4, $5)
             RETURNING id
             """,
-            title, source_url, content, content_hash,
+            title, source_url, content, content_hash, uploaded_by,
         )
 
         for chunk_data, vector in zip(all_chunks, vectors):

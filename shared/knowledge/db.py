@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS knowledge.documents (
     source_url   TEXT,
     raw_content  TEXT NOT NULL,
     content_hash TEXT UNIQUE,
+    uploaded_by  TEXT,
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -96,10 +97,14 @@ async def init_db() -> None:
     conn = await asyncpg.connect(os.environ["KNOWLEDGE_DATABASE_URL"])
     try:
         await conn.execute(_SCHEMA)
-        # Migration: add content_hash to existing installs that predate it.
+        # Migrations: add columns to existing installs that predate them.
         await conn.execute("""
             ALTER TABLE knowledge.documents
             ADD COLUMN IF NOT EXISTS content_hash TEXT;
+        """)
+        await conn.execute("""
+            ALTER TABLE knowledge.documents
+            ADD COLUMN IF NOT EXISTS uploaded_by TEXT;
         """)
         await conn.execute("""
             DO $$ BEGIN

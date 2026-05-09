@@ -8,10 +8,21 @@ Attach to the MCP Starlette app before running uvicorn:
 
 from __future__ import annotations
 
+from contextvars import ContextVar
+
 import jwt
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse
+
+# Populated after successful token validation; available within the request context.
+_current_user: ContextVar[dict] = ContextVar("current_user", default={})
+
+
+def get_current_user() -> dict:
+    """Return {"user_id": ..., "email": ...} for the authenticated request."""
+    return _current_user.get()
+
 
 # These paths are served without a token so MCP clients can discover the auth server.
 _OPEN_PATHS = frozenset({
@@ -45,7 +56,8 @@ class BearerTokenMiddleware(BaseHTTPMiddleware):
 
         token = auth[7:]
         try:
-            jwt.decode(token, self._secret, algorithms=["HS256"])
+            payload = jwt.decode(token, self._secret, algorithms=["HS256"])
+            _current_user.set({"user_id": payload.get("sub"), "email": payload.get("email")})
         except jwt.ExpiredSignatureError:
             return JSONResponse(
                 {"error": "invalid_token", "error_description": "Token expired"},
