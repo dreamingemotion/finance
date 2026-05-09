@@ -173,9 +173,17 @@ def main() -> None:
     mcp_url = os.environ.get("KNOWLEDGE_URL", "").rstrip("/")
     resource_metadata_url = f"{mcp_url}/.well-known/oauth-protected-resource" if mcp_url else ""
 
+    # Build the MCP ASGI app first so its lifespan can be referenced below.
+    # When mounted inside a wrapper Starlette app, Starlette does NOT
+    # automatically call the inner app's lifespan, so we chain it explicitly.
+    # Without this the StreamableHTTPSessionManager's task group is never
+    # initialized, causing RuntimeError on the first request.
+    _mcp_asgi_app = mcp.streamable_http_app()
+
     @asynccontextmanager
     async def lifespan(app):
-        yield
+        async with _mcp_asgi_app.router.lifespan_context(_mcp_asgi_app):
+            yield
         await close_pool()
 
     async def protected_resource_metadata(request: StarletteRequest):
@@ -188,7 +196,7 @@ def main() -> None:
         lifespan=lifespan,
         routes=[
             Route("/.well-known/oauth-protected-resource", protected_resource_metadata),
-            Mount("/", app=mcp.streamable_http_app()),
+            Mount("/", app=_mcp_asgi_app),
         ],
     )
     app.add_middleware(
