@@ -30,6 +30,8 @@ research/
 ### Install dependencies
 
 ```bash
+cd /opt/agents/finance
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
