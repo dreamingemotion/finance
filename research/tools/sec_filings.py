@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import traceback
 from pathlib import Path
 
 from research import edgar
@@ -41,6 +42,13 @@ async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
 
     Use the returned doc_id with all other filing tools.
     """
+    try:
+        return await _submit_filing_inner(ticker, form_type, year)
+    except Exception:
+        return {"error": traceback.format_exc()}
+
+
+async def _submit_filing_inner(ticker: str, form_type: str, year: int) -> dict:
     cik    = await edgar.resolve_cik(ticker)
     filing = await edgar.find_filing(cik, form_type, year)
 
