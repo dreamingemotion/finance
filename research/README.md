@@ -70,6 +70,87 @@ python -m research.server --transport streamable-http
 python -m research.server --transport streamable-http --require-auth
 ```
 
+---
+
+## Deploying as a remote MCP server
+
+### 1. Environment variables
+
+Add these to `/etc/finance.env` alongside the existing entries:
+
+```
+EDGAR_USER_AGENT=YourName your@email.com
+RESEARCH_WORKSPACE=/opt/agents/finance/research/workspace
+RESEARCH_HOST=0.0.0.0
+RESEARCH_PORT=8093
+RESEARCH_URL=https://mcp.unfolding.in/servers/finance/research
+
+# PageIndex LiteLLM — route through OpenRouter
+OPENAI_API_KEY=<same value as OPENROUTER_API_KEY>
+OPENAI_BASE_URL=https://openrouter.ai/api/v1
+
+# Required — shared with auth server
+JWT_SECRET=<same value as knowledge server>
+AUTH_SERVER_URL=https://mcp.unfolding.in/servers/finance/auth
+```
+
+### 2. Systemd service
+
+**/etc/systemd/system/finance-research.service**
+```ini
+[Unit]
+Description=Finance Research MCP Server
+After=network.target finance-auth.service
+
+[Service]
+User=ubuntu
+WorkingDirectory=/opt/agents/finance
+ExecStart=/opt/agents/finance/.venv/bin/python -m research.server --transport streamable-http --require-auth
+EnvironmentFile=/etc/finance.env
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Enable and start:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable finance-research
+sudo systemctl start finance-research
+```
+
+### 3. Nginx reverse proxy
+
+Add to your nginx server config:
+
+```nginx
+location /servers/finance/research/ {
+    proxy_pass http://127.0.0.1:8093/;
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header Connection '';
+    proxy_buffering off;
+    proxy_read_timeout 86400;
+    chunked_transfer_encoding on;
+}
+```
+
+Reload nginx:
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### 4. Connect to Claude web
+
+Add it as a remote MCP server in Claude:
+
+**URL:** `https://mcp.unfolding.in/servers/finance/research/mcp`
+
+Claude will prompt you to authenticate via OAuth on first connection.
+
+---
+
 ## Usage
 
 ```
