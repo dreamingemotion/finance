@@ -33,6 +33,8 @@ _LIST_TAGS   = frozenset({"ul", "ol"})
 
 
 def _is_hidden(element: Tag) -> bool:
+    if not element.attrs:
+        return False
     style = element.get("style", "").replace(" ", "").lower()
     return "display:none" in style or "visibility:hidden" in style
 
@@ -55,6 +57,8 @@ def _is_all_caps_heading(text: str) -> bool:
 def _is_bold(element: Tag) -> bool:
     if element.name in ("b", "strong"):
         return True
+    if not element.attrs:
+        return False
     style = element.get("style", "").lower()
     return "font-weight:bold" in style.replace(" ", "") or "font-weight: bold" in style
 
