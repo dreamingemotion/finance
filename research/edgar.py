@@ -10,6 +10,7 @@ Environment variables:
 from __future__ import annotations
 
 import os
+import re
 
 import httpx
 
@@ -103,36 +104,59 @@ async def find_filing(cik: str, form_type: str, year: int) -> dict:
     return candidates[0]
 
 
-async def download_filing_pdf(cik: str, accession_number: str) -> tuple[bytes, str]:
+async def _list_filing_documents(cik: str, accession_number: str) -> list[str]:
     """
-    Download the PDF from a filing's document index.
+    Return all filenames listed in a filing.
 
-    Returns (pdf_bytes, filename).
-    Raises ValueError if no PDF is found in the filing index.
+    Tries the JSON index endpoint first. Falls back to parsing the HTML
+    directory listing, which EDGAR always serves regardless of filing age
+    or filer type.
     """
     acc_no_dashes = accession_number.replace("-", "")
     cik_int = int(cik)
-    index_url = (
-        f"{_ARCHIVES}/{cik_int}/{acc_no_dashes}/{accession_number}-index.json"
-    )
+    base = f"{_ARCHIVES}/{cik_int}/{acc_no_dashes}"
 
     async with httpx.AsyncClient() as client:
-        resp = await client.get(index_url, headers=_headers(), timeout=15)
+        resp = await client.get(
+            f"{base}/{accession_number}-index.json",
+            headers=_headers(), timeout=15,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            return [doc["name"] for doc in data.get("documents", []) if "name" in doc]
+
+    # JSON index absent — fall back to HTML directory listing
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(f"{base}/", headers=_headers(), timeout=15)
         resp.raise_for_status()
-        index = resp.json()
+
+    # Pull bare filenames from href attributes (no path separators)
+    return re.findall(r'href="([^"/]+\.[a-zA-Z]+)"', resp.text)
+
+
+async def download_filing_pdf(cik: str, accession_number: str) -> tuple[bytes, str]:
+    """
+    Download the PDF from a filing.
+
+    Returns (pdf_bytes, filename).
+    Raises ValueError if no PDF is found in the filing.
+    """
+    filenames = await _list_filing_documents(cik, accession_number)
 
     pdf_file = next(
-        (doc["name"] for doc in index.get("documents", [])
-         if doc.get("name", "").lower().endswith(".pdf")),
+        (f for f in filenames if f.lower().endswith(".pdf")),
         None,
     )
     if not pdf_file:
         raise ValueError(
-            f"No PDF found in EDGAR filing index for accession {accession_number}. "
+            f"No PDF found in EDGAR filing for accession {accession_number}. "
             "This filing may only be available in HTML format."
         )
 
+    acc_no_dashes = accession_number.replace("-", "")
+    cik_int = int(cik)
     pdf_url = f"{_ARCHIVES}/{cik_int}/{acc_no_dashes}/{pdf_file}"
+
     async with httpx.AsyncClient() as client:
         resp = await client.get(pdf_url, headers=_headers(), timeout=120)
         resp.raise_for_status()
