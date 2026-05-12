@@ -10,16 +10,19 @@ Usage:
     python -m research.server --transport streamable-http --require-auth
 
 Environment variables:
-  EDGAR_USER_AGENT    required by SEC, e.g. "MyApp contact@example.com"
-  OPENROUTER_API_KEY  your OpenRouter API key
-  OPENROUTER_BASE_URL https://openrouter.ai/api/v1 (default)
-  GENERATION_MODEL    anthropic/claude-sonnet-4-6 (default)
-  RESEARCH_WORKSPACE  PageIndex workspace directory (default: ./workspace)
-  RESEARCH_HOST       bind host (default 0.0.0.0)
-  RESEARCH_PORT       bind port (default 8093)
-  RESEARCH_URL        public base URL for this server
-  JWT_SECRET          shared with auth server (--require-auth only)
-  AUTH_SERVER_URL     public URL of auth server (--require-auth only)
+  EDGAR_USER_AGENT          required by SEC, e.g. "MyApp contact@example.com"
+  OPENROUTER_API_KEY        your OpenRouter API key
+  OPENROUTER_BASE_URL       https://openrouter.ai/api/v1 (default)
+  GENERATION_MODEL          anthropic/claude-sonnet-4-6 (default)
+  RESEARCH_WORKSPACE        workspace directory (default: ./workspace)
+  RESEARCH_HOST             bind host (default 0.0.0.0)
+  RESEARCH_PORT             bind port (default 8093)
+  RESEARCH_URL              public base URL for this server
+  JWT_SECRET                shared with auth server (--require-auth only)
+  AUTH_SERVER_URL           public URL of auth server (--require-auth only)
+  TASTYTRADE_CLIENT_ID      tastytrade OAuth client ID
+  TASTYTRADE_CLIENT_SECRET  tastytrade OAuth client secret
+  TASTYTRADE_REFRESH_TOKEN  tastytrade OAuth refresh token
 
 PageIndex uses LiteLLM internally. To route it through OpenRouter set:
   OPENAI_API_KEY  → same value as OPENROUTER_API_KEY
@@ -43,6 +46,11 @@ from research.tools.sec_filings import (
     list_filings         as _list_filings,
     search_filing        as _search_filing,
     submit_filing        as _submit_filing,
+)
+from research.tools.market_data import (
+    get_quote    as _get_quote,
+    get_snapshot as _get_snapshot,
+    get_bars     as _get_bars,
 )
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
@@ -129,6 +137,49 @@ async def delete_filing(doc_id: str) -> dict:
     Does not delete the cached HTML file, only the search index.
     """
     return await _delete_filing(doc_id)
+
+
+@mcp.tool()
+async def get_quote(symbol: str) -> dict:
+    """
+    Fetch a real-time quote for an equity symbol.
+
+    Returns price, bid, ask, mark, day open/high/low/close, volume,
+    data_source ("primary" = tastytrade, "secondary" = yfinance),
+    and stale (true if the quote predates the most recent market close).
+    """
+    return await _get_quote(symbol)
+
+
+@mcp.tool()
+async def get_snapshot(symbol: str) -> dict:
+    """
+    Fetch a full market snapshot for an equity symbol.
+
+    Combines real-time quote with extended metrics: P/E ratio (tastytrade),
+    P/B ratio (yfinance), IV rank, 30/60-day historical volatility, beta,
+    market cap, dividend yield, and borrow rate.
+
+    data_source reflects whether tastytrade (primary) or yfinance
+    (secondary) supplied the quote and metrics.  P/B is always from yfinance.
+    """
+    return await _get_snapshot(symbol)
+
+
+@mcp.tool()
+async def get_bars(symbol: str, period: str, interval: str) -> dict:
+    """
+    Fetch OHLCV bars for charting.
+
+    period   — look-back window: 1d 5d 1mo 3mo 6mo 1y 2y 5y
+    interval — bar width:        1m 5m 15m 30m 1h 1d 1wk 1mo
+
+    Returns bars (list of {time, open, high, low, close, volume}),
+    bar_count, data_source, and last_bar_stale.
+    Bars are sorted oldest-first so they can be passed directly to a
+    chart library.  tastytrade DXLink is primary; yfinance is the fallback.
+    """
+    return await _get_bars(symbol, period, interval)
 
 
 def main() -> None:
