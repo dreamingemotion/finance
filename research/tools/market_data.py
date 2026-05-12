@@ -101,7 +101,9 @@ async def get_snapshot(symbol: str) -> dict:
             _yf.get_metrics(symbol),
         )
         updated_at_str = yf_quote.pop("updated_at", None)
-        pb_ratio = yf_metrics.get("pb_ratio")
+        # pb_ratio was already fetched in the initial gather; reuse it if valid
+        if isinstance(pb_ratio, Exception):
+            pb_ratio = None
         data_source = "secondary"
         merged = {**yf_quote, **yf_metrics}
 

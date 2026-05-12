@@ -1,84 +1,94 @@
 """
 yfinance market data provider (secondary / fallback).
-
-All yfinance calls are blocking; they run in a thread executor so they
-don't block the async event loop.
+Uses the shared YahooClient for consistency with the primary tastytrade provider.
 """
 from __future__ import annotations
 
 import asyncio
-from datetime import timezone
+from datetime import datetime, timedelta, timezone
 
-import yfinance as yf
+from shared.data.brokers.yahoo import YahooClient
 
 from .base import MarketDataProvider
 
+_PERIOD_DAYS: dict[str, int | None] = {
+    "1d":  1,   "5d":  5,   "1mo": 30,  "3mo": 90,
+    "6mo": 180, "1y":  365, "2y":  730, "5y":  1825,
+    "10y": 3650, "max": None,
+}
 
-async def _run(fn):
-    return await asyncio.to_thread(fn)
+# yfinance-style interval → YahooClient candle period (TT-style)
+_YF_TO_YC: dict[str, str] = {
+    "1wk": "1w",
+}
+
+
+def _from_date(period: str) -> str | None:
+    days = _PERIOD_DAYS.get(period)
+    if days is None:
+        return None
+    dt = datetime.now(timezone.utc) - timedelta(days=days)
+    return dt.date().isoformat()
+
+
+def _candles_to_bars(candles: list[dict]) -> list[dict]:
+    bars = []
+    for c in candles:
+        t = c.get("time", 0)
+        ts = datetime.fromtimestamp(t / 1000, tz=timezone.utc).isoformat() if isinstance(t, (int, float)) else str(t)
+        bars.append({
+            "time":   ts,
+            "open":   float(c["open"]),
+            "high":   float(c["high"]),
+            "low":    float(c["low"]),
+            "close":  float(c["close"]),
+            "volume": float(c["volume"]) if c.get("volume") is not None else None,
+        })
+    bars.sort(key=lambda b: b["time"])
+    return bars
 
 
 class YFinanceProvider(MarketDataProvider):
 
+    def __init__(self) -> None:
+        self._client = YahooClient()
+
     async def get_quote(self, symbol: str) -> dict:
-        def _fetch():
-            info = yf.Ticker(symbol).info or {}
-            return {
-                "symbol":     symbol,
-                "bid":        info.get("bid"),
-                "ask":        info.get("ask"),
-                "last":       info.get("currentPrice") or info.get("regularMarketPrice"),
-                "mark":       None,
-                "open":       info.get("open") or info.get("regularMarketOpen"),
-                "high":       info.get("dayHigh") or info.get("regularMarketDayHigh"),
-                "low":        info.get("dayLow") or info.get("regularMarketDayLow"),
-                "close":      info.get("previousClose") or info.get("regularMarketPreviousClose"),
-                "volume":     info.get("volume") or info.get("regularMarketVolume"),
-                "updated_at": None,
-            }
-        return await _run(_fetch)
+        data = await self._client.get_quote(symbol)
+        # Normalize day_high/day_low → high/low to match TT MarketData shape
+        return {
+            "symbol":     data.get("symbol", symbol.upper()),
+            "bid":        data.get("bid"),
+            "ask":        data.get("ask"),
+            "last":       data.get("last"),
+            "mark":       data.get("mark"),
+            "open":       data.get("open"),
+            "high":       data.get("day_high"),
+            "low":        data.get("day_low"),
+            "close":      data.get("prev_close"),
+            "volume":     data.get("volume"),
+            "updated_at": None,
+        }
 
     async def get_metrics(self, symbol: str) -> dict:
-        def _fetch():
-            info = yf.Ticker(symbol).info or {}
-            return {
-                "symbol":         symbol,
-                "pe_ratio":       info.get("trailingPE") or info.get("forwardPE"),
-                "pb_ratio":       info.get("priceToBook"),
-                "eps":            info.get("trailingEps"),
-                "market_cap":     info.get("marketCap"),
-                "iv_rank":        None,
-                "iv_index":       None,
-                "hv_30d":         None,
-                "hv_60d":         None,
-                "beta":           info.get("beta"),
-                "dividend_yield": info.get("dividendYield"),
-                "borrow_rate":    None,
-            }
-        return await _run(_fetch)
+        items = await self._client.get_metrics([symbol])
+        return items[0] if items else {"symbol": symbol}
 
     async def get_pb_ratio(self, symbol: str) -> float | None:
         def _fetch():
-            return (yf.Ticker(symbol).info or {}).get("priceToBook")
-        return await _run(_fetch)
+            val = self._client.get_info(symbol).get("priceToBook")
+            try:
+                return float(val) if val is not None else None
+            except (TypeError, ValueError):
+                return None
+        return await asyncio.to_thread(_fetch)
 
     async def get_bars(self, symbol: str, period: str, interval: str) -> list[dict]:
-        def _fetch():
-            df = yf.Ticker(symbol).history(
-                period=period, interval=interval, auto_adjust=True
-            )
-            bars = []
-            for ts, row in df.iterrows():
-                dt = ts.to_pydatetime()
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                bars.append({
-                    "time":   dt.astimezone(timezone.utc).isoformat(),
-                    "open":   float(row["Open"]),
-                    "high":   float(row["High"]),
-                    "low":    float(row["Low"]),
-                    "close":  float(row["Close"]),
-                    "volume": float(row["Volume"]),
-                })
-            return bars
-        return await _run(_fetch)
+        yc_period = _YF_TO_YC.get(interval, interval)
+        from_dt   = _from_date(period)
+        candles   = await self._client.get_candles(
+            symbols=[symbol],
+            period=yc_period,
+            from_date=from_dt,
+        )
+        return _candles_to_bars(candles)
