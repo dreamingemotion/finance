@@ -36,12 +36,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp.server.fastmcp import FastMCP
 from research.tools.sec_filings import (
-    batch_query      as _batch_query,
-    get_filing_status     as _get_filing_status,
-    get_filing_structure  as _get_filing_structure,
-    get_section      as _get_section,
-    search_filing    as _search_filing,
-    submit_filing    as _submit_filing,
+    batch_query          as _batch_query,
+    delete_filing        as _delete_filing,
+    get_filing_structure as _get_filing_structure,
+    get_section          as _get_section,
+    list_filings         as _list_filings,
+    search_filing        as _search_filing,
+    submit_filing        as _submit_filing,
 )
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
@@ -65,16 +66,6 @@ async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
     Subsequent calls for the same filing return immediately from cache.
     """
     return await _submit_filing(ticker, form_type, year)
-
-
-@mcp.tool()
-async def get_filing_status(doc_id: str) -> dict:
-    """
-    Check the processing status of a filing indexed by PageIndex.
-
-    Returns status ("completed", "processing", etc.) and document metadata.
-    """
-    return await _get_filing_status(doc_id)
 
 
 @mcp.tool()
@@ -122,6 +113,22 @@ async def batch_query(query: str, doc_ids: list[str]) -> dict:
     or financials across companies. Results are keyed by doc_id.
     """
     return await _batch_query(query, doc_ids)
+
+
+@mcp.tool()
+async def list_filings() -> list[dict]:
+    """List all filings currently indexed in the local workspace."""
+    return await _list_filings()
+
+
+@mcp.tool()
+async def delete_filing(doc_id: str) -> dict:
+    """
+    Permanently delete an indexed filing from the workspace.
+
+    Does not delete the cached HTML file, only the search index.
+    """
+    return await _delete_filing(doc_id)
 
 
 def main() -> None:

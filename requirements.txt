@@ -9,4 +9,6 @@ PyJWT
 asyncpg
 anyio
 openai
-pageindex
+beautifulsoup4
+lxml
+tiktoken

@@ -134,31 +134,42 @@ async def _list_filing_documents(cik: str, accession_number: str) -> list[str]:
     return re.findall(r'href="([^"/]+\.[a-zA-Z]+)"', resp.text)
 
 
-async def download_filing_pdf(cik: str, accession_number: str) -> tuple[bytes, str]:
+async def download_filing_html(
+    cik: str,
+    accession_number: str,
+    primary_document: str,
+) -> tuple[bytes, str]:
     """
-    Download the PDF from a filing.
+    Download the primary HTML document for a filing.
 
-    Returns (pdf_bytes, filename).
-    Raises ValueError if no PDF is found in the filing.
+    Returns (html_bytes, filename).
+    Falls back to the filing index to find an HTML file if the primary
+    document URL returns a non-200 status.
     """
+    acc_no_dashes = accession_number.replace("-", "")
+    cik_int       = int(cik)
+    base          = f"{_ARCHIVES}/{cik_int}/{acc_no_dashes}"
+
+    # Try the primary document first
+    html_url = f"{base}/{primary_document}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(html_url, headers=_headers(), timeout=120)
+        if resp.status_code == 200:
+            return resp.content, primary_document
+
+    # Fall back: scan the filing index for any .htm/.html file
     filenames = await _list_filing_documents(cik, accession_number)
-
-    pdf_file = next(
-        (f for f in filenames if f.lower().endswith(".pdf")),
+    html_file = next(
+        (f for f in filenames if f.lower().endswith((".html", ".htm"))),
         None,
     )
-    if not pdf_file:
+    if not html_file:
         raise ValueError(
-            f"No PDF found in EDGAR filing for accession {accession_number}. "
-            "This filing may only be available in HTML format."
+            f"No HTML document found in EDGAR filing for accession {accession_number}."
         )
 
-    acc_no_dashes = accession_number.replace("-", "")
-    cik_int = int(cik)
-    pdf_url = f"{_ARCHIVES}/{cik_int}/{acc_no_dashes}/{pdf_file}"
-
     async with httpx.AsyncClient() as client:
-        resp = await client.get(pdf_url, headers=_headers(), timeout=120)
+        resp = await client.get(f"{base}/{html_file}", headers=_headers(), timeout=120)
         resp.raise_for_status()
 
-    return resp.content, pdf_file
+    return resp.content, html_file
