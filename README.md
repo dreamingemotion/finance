@@ -19,6 +19,7 @@ finance/
 │       └── brokers/    ← pure data clients (no MCP coupling)
 │
 ├── knowledge/          ← knowledge MCP server (port 8092)
+├── research/           ← research MCP server (port 8093)
 ├── signals/            ← (future) MCP server — imports shared/
 ├── portfolio/          ← (future) MCP server — imports shared/
 └── ...                 ← future purpose-built MCP servers
@@ -143,6 +144,14 @@ finance/
 ├── knowledge/                    # Knowledge MCP server (port 8092)
 │   ├── server.py                 # FastMCP — ingest + search tools
 │   ├── ingest.py                 # Claude-powered chunking + categorization
+│   └── README.md                 # Setup and deployment guide
+│
+├── research/                     # Research MCP server (port 8093)
+│   ├── server.py                 # FastMCP — SEC filing tools + future modules
+│   ├── edgar.py                  # EDGAR REST API client
+│   ├── pageindex_client.py       # Async PageIndex SDK wrapper
+│   ├── tools/
+│   │   └── sec_filings.py        # submit_filing, search_filing, batch_query, etc.
 │   └── README.md                 # Setup and deployment guide
 │
 └── shared/                       # Foundation library
