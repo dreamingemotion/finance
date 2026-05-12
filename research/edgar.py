@@ -38,6 +38,34 @@ async def get_cik(ticker: str) -> str:
     raise ValueError(f"Ticker '{ticker}' not found in EDGAR company list")
 
 
+async def resolve_cik(ticker_or_cik: str) -> str:
+    """
+    Resolve a ticker symbol or raw CIK to a zero-padded 10-digit CIK.
+
+    Tries ticker lookup first. If that fails and the input is numeric,
+    treats it as a CIK directly and verifies it exists on EDGAR.
+    """
+    try:
+        return await get_cik(ticker_or_cik)
+    except ValueError:
+        pass
+
+    if not ticker_or_cik.strip().lstrip("0").isdigit():
+        raise ValueError(
+            f"'{ticker_or_cik}' was not found as a ticker and is not a numeric CIK."
+        )
+
+    cik = ticker_or_cik.strip().zfill(10)
+    url = f"{_DATA_BASE}/submissions/CIK{cik}.json"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=_headers(), timeout=15)
+        if resp.status_code == 404:
+            raise ValueError(f"CIK '{ticker_or_cik}' not found on EDGAR.")
+        resp.raise_for_status()
+
+    return cik
+
+
 async def find_filing(cik: str, form_type: str, year: int) -> dict:
     """
     Return metadata for the most recent filing of form_type filed in year.

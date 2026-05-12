@@ -58,6 +58,9 @@ async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
     Downloads the PDF for the most recent filing of form_type (e.g. "10-K")
     filed in the given year and returns a doc_id for use with all other tools.
 
+    ticker can be a ticker symbol (e.g. "BLK") or a numeric CIK (e.g. "1364742").
+    If the ticker lookup fails, the value is tried as a raw CIK automatically.
+
     Indexing a large filing may take several minutes on first call.
     Subsequent calls for the same filing return immediately from cache.
     """

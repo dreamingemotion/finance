@@ -75,13 +75,16 @@ async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
     Downloads the PDF for the most recent filing of form_type (e.g. "10-K")
     filed in the given year, submits it to PageIndex, and returns a doc_id.
 
+    ticker can be a ticker symbol (e.g. "BLK") or a numeric CIK (e.g. "1364742").
+    If the ticker lookup fails, the value is tried as a raw CIK automatically.
+
     Indexing a large filing (200+ pages) may take several minutes.
     PDFs and indices are cached in the workspace — calling this again for
     the same filing returns the cached doc_id immediately.
 
     Use the returned doc_id with all other filing tools.
     """
-    cik     = await edgar.get_cik(ticker)
+    cik     = await edgar.resolve_cik(ticker)
     filing  = await edgar.find_filing(cik, form_type, year)
 
     # Stable filename so PageIndex deduplicates by name across calls
