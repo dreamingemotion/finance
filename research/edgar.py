@@ -67,23 +67,14 @@ async def resolve_cik(ticker_or_cik: str) -> str:
     return cik
 
 
-async def find_filing(cik: str, form_type: str, year: int) -> dict:
-    """
-    Return metadata for the most recent filing of form_type filed in year.
-
-    Returns: {accession_number, filing_date, primary_document, form_type}
-    """
-    url = f"{_DATA_BASE}/submissions/CIK{cik}.json"
-    async with httpx.AsyncClient() as client:
-        resp = await client.get(url, headers=_headers(), timeout=15)
-        resp.raise_for_status()
-        data = resp.json()
-
-    recent = data.get("filings", {}).get("recent", {})
-    forms        = recent.get("form", [])
-    dates        = recent.get("filingDate", [])
-    accessions   = recent.get("accessionNumber", [])
-    primary_docs = recent.get("primaryDocument", [])
+def _candidates_from_block(block: dict | None, form_type: str, year: int) -> list[dict]:
+    """Extract matching filing candidates from a submissions block."""
+    if not block:
+        return []
+    forms        = block.get("form", []) or []
+    dates        = block.get("filingDate", []) or []
+    accessions   = block.get("accessionNumber", []) or []
+    primary_docs = block.get("primaryDocument", []) or []
 
     candidates = []
     for form, date, accession, primary_doc in zip(forms, dates, accessions, primary_docs):
@@ -94,6 +85,45 @@ async def find_filing(cik: str, form_type: str, year: int) -> dict:
                 "primary_document": primary_doc,
                 "form_type":        form,
             })
+    return candidates
+
+
+async def find_filing(cik: str, form_type: str, year: int) -> dict:
+    """
+    Return metadata for the most recent filing of form_type filed in year.
+
+    Searches the inline "recent" block first, then follows paginated "files"
+    entries if needed (handles companies with large filing histories).
+
+    Returns: {accession_number, filing_date, primary_document, form_type}
+    """
+    url = f"{_DATA_BASE}/submissions/CIK{cik}.json"
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(url, headers=_headers(), timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+
+    filings_obj = data.get("filings") or {}
+    recent      = filings_obj.get("recent") or {}
+    candidates  = _candidates_from_block(recent, form_type, year)
+
+    # Follow paginated files if not found in the inline block
+    if not candidates:
+        for file_entry in (filings_obj.get("files") or []):
+            file_name = file_entry.get("name", "")
+            if not file_name:
+                continue
+            page_url = f"{_DATA_BASE}/{file_name}"
+            async with httpx.AsyncClient() as client:
+                page_resp = await client.get(page_url, headers=_headers(), timeout=15)
+                if page_resp.status_code != 200:
+                    continue
+                page_data = page_resp.json()
+            candidates.extend(
+                _candidates_from_block(page_data, form_type, year)
+            )
+            if candidates:
+                break
 
     if not candidates:
         raise ValueError(
