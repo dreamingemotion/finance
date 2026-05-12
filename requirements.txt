@@ -9,3 +9,4 @@ PyJWT
 asyncpg
 anyio
 openai
+pageindex
