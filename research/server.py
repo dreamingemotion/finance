@@ -20,9 +20,9 @@ Environment variables:
   RESEARCH_URL              public base URL for this server
   JWT_SECRET                shared with auth server (--require-auth only)
   AUTH_SERVER_URL           public URL of auth server (--require-auth only)
-  TASTYTRADE_CLIENT_ID      tastytrade OAuth client ID
-  TASTYTRADE_CLIENT_SECRET  tastytrade OAuth client secret
-  TASTYTRADE_REFRESH_TOKEN  tastytrade OAuth refresh token
+  TT_CLIENT_ID              tastytrade OAuth client ID
+  TT_CLIENT_SECRET          tastytrade OAuth client secret
+  TT_REFRESH_TOKEN          tastytrade OAuth refresh token
 
 PageIndex uses LiteLLM internally. To route it through OpenRouter set:
   OPENAI_API_KEY  → same value as OPENROUTER_API_KEY

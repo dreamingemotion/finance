@@ -56,9 +56,9 @@ class TastytradeProvider(MarketDataProvider):
     def _get_client(self) -> TastytradeClient:
         if self._client is None:
             self._client = TastytradeClient(
-                client_id=os.environ["TASTYTRADE_CLIENT_ID"],
-                client_secret=os.environ["TASTYTRADE_CLIENT_SECRET"],
-                refresh_token=os.environ["TASTYTRADE_REFRESH_TOKEN"],
+                client_id=os.environ["TT_CLIENT_ID"],
+                client_secret=os.environ["TT_CLIENT_SECRET"],
+                refresh_token=os.environ["TT_REFRESH_TOKEN"],
             )
         return self._client
 
