@@ -185,6 +185,9 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     bar_count, data_source, and last_bar_stale.
     Bars are sorted oldest-first so they can be passed directly to a
     chart library.  tastytrade DXLink is primary; yfinance is the fallback.
+
+    Always render the result as a candlestick chart using the OHLCV fields,
+    unless the user explicitly requests a different chart type.
     """
     return await _get_bars(symbol, period, interval)
 
