@@ -131,6 +131,6 @@ class TastytradeProvider(MarketDataProvider):
             symbols=[symbol],
             period=tt_period,
             from_date=from_dt,
-            duration_seconds=10.0,
+            duration_seconds=3.0,
         )
         return _candles_to_bars(candles)
