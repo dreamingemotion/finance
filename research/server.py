@@ -31,11 +31,18 @@ PageIndex uses LiteLLM internally. To route it through OpenRouter set:
 from __future__ import annotations
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    stream=sys.stderr,
+)
 
 from mcp.server.fastmcp import FastMCP
 from research.tools.sec_filings import (
