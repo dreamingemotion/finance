@@ -4,6 +4,7 @@ Thin wrapper around shared.data.brokers.tastytrade.TastytradeClient.
 """
 from __future__ import annotations
 
+import asyncio
 import os
 from datetime import datetime, timedelta, timezone
 
@@ -63,8 +64,61 @@ class TastytradeProvider(MarketDataProvider):
         return self._client
 
     async def get_quote(self, symbol: str) -> dict:
-        items = await self._get_client().get_quotes(equities=[symbol])
-        return items[0] if items else {"symbol": symbol}
+        client = self._get_client()
+        results = await asyncio.gather(
+            client.stream_quotes([symbol],     duration_seconds=2.0),
+            client.stream_trades([symbol],     duration_seconds=2.0),
+            client.stream_summaries([symbol],  duration_seconds=2.0),
+            return_exceptions=True,
+        )
+        quotes, trades, summaries = results
+
+        if all(isinstance(r, Exception) for r in results):
+            raise results[0]
+
+        q = quotes[0]     if not isinstance(quotes,    Exception) and quotes    else {}
+        t = trades[0]     if not isinstance(trades,    Exception) and trades    else {}
+        s = summaries[0]  if not isinstance(summaries, Exception) and summaries else {}
+
+        bid  = q.get("bid_price")
+        ask  = q.get("ask_price")
+        last = t.get("price")
+
+        mark = None
+        if bid is not None and ask is not None:
+            try:
+                mark = round((float(bid) + float(ask)) / 2, 4)
+            except (TypeError, ValueError):
+                pass
+        if mark is None:
+            mark = last
+
+        updated_at = None
+        trade_time = t.get("time")
+        if trade_time:
+            try:
+                updated_at = datetime.fromtimestamp(int(trade_time) / 1000, tz=timezone.utc).isoformat()
+            except (TypeError, ValueError, OSError):
+                pass
+
+        close = s.get("day_close_price") or s.get("prev_day_close_price")
+
+        def _f(v):
+            return float(v) if v is not None else None
+
+        return {
+            "symbol":     symbol.upper(),
+            "bid":        _f(bid),
+            "ask":        _f(ask),
+            "last":       _f(last),
+            "mark":       _f(mark),
+            "open":       _f(s.get("day_open_price")),
+            "high":       _f(s.get("day_high_price")),
+            "low":        _f(s.get("day_low_price")),
+            "close":      _f(close),
+            "volume":     t.get("day_volume"),
+            "updated_at": updated_at,
+        }
 
     async def get_metrics(self, symbol: str) -> dict:
         items = await self._get_client().get_metrics([symbol])
