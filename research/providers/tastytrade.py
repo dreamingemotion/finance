@@ -63,7 +63,8 @@ class TastytradeProvider(MarketDataProvider):
         return self._client
 
     async def get_quote(self, symbol: str) -> dict:
-        return await self._get_client().get_quote(symbol)
+        items = await self._get_client().get_quotes(equities=[symbol])
+        return items[0] if items else {"symbol": symbol}
 
     async def get_metrics(self, symbol: str) -> dict:
         items = await self._get_client().get_metrics([symbol])
