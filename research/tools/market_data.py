@@ -126,6 +126,15 @@ async def get_snapshot(symbol: str) -> dict:
 # get_bars
 # ---------------------------------------------------------------------------
 
+_CHART_STYLE = {
+    "up_color":      "#1d9e75",
+    "down_color":    "#d85a30",
+    "background":    "transparent",
+    "grid_opacity":  0.07,
+    "render_method": "canvas2d",
+    "tooltip":       True,
+}
+
 _PERIOD_LABELS: dict[str, str] = {
     "1d": "1-Day", "3d": "3-Day", "5d": "5-Day",
     "1mo": "1-Month", "2mo": "2-Month", "3mo": "3-Month", "6mo": "6-Month",
@@ -226,5 +235,6 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
         "data_source":         data_source,
         "last_bar_stale":      last_stale,
         "suppress_time_gaps":  interval in _intraday,
+        "chart_style":         _CHART_STYLE,
         "bars":                bars,
     }

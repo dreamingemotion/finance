@@ -192,14 +192,22 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     interval — bar width:        1m 5m 15m 30m 1h 1d 1wk 1mo
 
     Returns bars (list of {time, open, high, low, close, volume}),
-    bar_count, data_source, last_bar_stale, and suppress_time_gaps.
-    Bars are sorted oldest-first so they can be passed directly to a
-    chart library.  tastytrade DXLink is primary; yfinance is the fallback.
+    bar_count, data_source, last_bar_stale, suppress_time_gaps, and chart_style.
+    Bars are sorted oldest-first.  tastytrade DXLink is primary; yfinance is the fallback.
 
-    Always render the result as a candlestick chart using the OHLCV fields,
-    unless the user explicitly requests a different chart type.
-    When suppress_time_gaps is true, use a categorical or sequential index
-    x-axis (not a datetime axis) so overnight and weekend gaps are not shown.
+    Rendering rules (follow exactly — do not override):
+    - Render as a candlestick chart using raw HTML Canvas 2D API only.
+      Do NOT use Chart.js, chartjs-chart-financial, Plotly, D3, or any chart library.
+      Draw wicks and bodies manually.
+    - Use chart_style.up_color for bullish candles and chart_style.down_color for bearish.
+      Never use Chart.js default colors or any other color scheme.
+    - When suppress_time_gaps is true, use a categorical or sequential index x-axis
+      so overnight and weekend gaps are not shown.
+    - Each chart must support mouseover tooltips showing date/time, O, H, L, C, and
+      % change for the hovered candle. Position tooltips within the panel bounds.
+    - Before rendering, deduplicate bars: first filter out any bar where open === 0,
+      then deduplicate by composite key (time + open + close).
+    - Do not use line charts unless the user explicitly asks.
     """
     return await _get_bars(symbol, period, interval)
 
@@ -227,13 +235,21 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
     ("top-left", "top-right", "bottom-left", "bottom-right") fields.
 
     Rendering rules (follow exactly — do not override):
-    - Render as candlestick charts in a 2×2 grid.
+    - Render as candlestick charts in a 2×2 grid using raw HTML Canvas 2D API only.
+      Do NOT use Chart.js, chartjs-chart-financial, Plotly, D3, or any chart library.
+      Draw wicks and bodies manually.
     - Sort charts by render_order and place each at its grid_position.
       Never reorder by timeframe length or any other logic.
     - Use each chart's label field verbatim as the chart title. Do not
       rename or substitute (e.g. do not replace "60 Min" with "Hourly").
-    - When a chart's suppress_time_gaps is true, use a categorical or
-      sequential index x-axis so overnight and weekend gaps are not shown.
+    - Use chart_style.up_color for bullish candles and chart_style.down_color for bearish
+      across all four panels. Never use Chart.js default colors or any other color scheme.
+    - When a chart's suppress_time_gaps is true, use a categorical or sequential index
+      x-axis so overnight and weekend gaps are not shown.
+    - Each chart must support mouseover tooltips showing date/time, O, H, L, C, and
+      % change for the hovered candle. Position tooltips within the panel bounds.
+    - Before rendering each chart, deduplicate bars: first filter out any bar where
+      open === 0, then deduplicate by composite key (time + open + close).
     - Do not use line charts unless the user explicitly asks.
     """
     return await _get_full_timeframe(symbol, charts)
