@@ -193,7 +193,7 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
         if not bars:
             raise ValueError("tastytrade returned zero bars")
     except Exception as exc:
-        logger.warning("tastytrade get_bars failed for %s: %s — falling back to yfinance", symbol, exc)
+        logger.warning("tastytrade get_bars failed for %s: %r — falling back to yfinance", symbol, exc)
         bars = await _yf.get_bars(symbol, period, interval)
         data_source = "secondary"
 
