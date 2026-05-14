@@ -55,9 +55,10 @@ from research.tools.sec_filings import (
     submit_filing        as _submit_filing,
 )
 from research.tools.market_data import (
-    get_quote    as _get_quote,
-    get_snapshot as _get_snapshot,
-    get_bars     as _get_bars,
+    get_quote           as _get_quote,
+    get_snapshot        as _get_snapshot,
+    get_bars            as _get_bars,
+    get_full_timeframe  as _get_full_timeframe,
 )
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
@@ -178,7 +179,7 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     """
     Fetch OHLCV bars for charting.
 
-    period   — look-back window: 1d 5d 1mo 3mo 6mo 1y 2y 5y
+    period   — look-back window: 1d 5d 1mo 3mo 6mo 1y 2y 5y 10y
     interval — bar width:        1m 5m 15m 30m 1h 1d 1wk 1mo
 
     Returns bars (list of {time, open, high, low, close, volume}),
@@ -190,6 +191,30 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     unless the user explicitly requests a different chart type.
     """
     return await _get_bars(symbol, period, interval)
+
+
+@mcp.tool()
+async def get_full_timeframe(symbol: str) -> dict:
+    """
+    Fetch four standard timeframes for full timeframe continuity analysis.
+
+    Use this tool when the user asks for "full timeframe", "full timeframe
+    continuity", or "full timeframe continuity analysis".
+
+    Returns four chart datasets fetched in parallel:
+      1. 3-Year Monthly   — long-term trend and major structure
+      2. 2-Year Weekly    — intermediate trend and swing structure
+      3. 2-Month Daily    — short-term trend and recent price action
+      4. 3-Day Hourly     — intraday detail and entry/exit context
+
+    Each entry in charts[] has label, symbol, period, interval, bar_count,
+    data_source, last_bar_stale, and bars (OHLCV list, oldest-first).
+
+    Always render all four charts as candlestick charts arranged in a
+    layout that makes sense for the display context (e.g. vertical stack
+    or 2×2 grid). Do not use line charts unless the user asks.
+    """
+    return await _get_full_timeframe(symbol)
 
 
 def main() -> None:

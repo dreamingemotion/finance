@@ -126,6 +126,31 @@ async def get_snapshot(symbol: str) -> dict:
 # get_bars
 # ---------------------------------------------------------------------------
 
+async def get_full_timeframe(symbol: str) -> dict:
+    """
+    Fetch four standard timeframes for full continuity analysis.
+
+    Runs all four get_bars calls in parallel.
+    """
+    labels = [
+        ("3-Year Monthly",   "3y",  "1mo"),
+        ("2-Year Weekly",    "2y",  "1wk"),
+        ("2-Month Daily",    "2mo", "1d"),
+        ("3-Day Hourly",     "3d",  "1h"),
+    ]
+    results = await asyncio.gather(
+        *[get_bars(symbol, p, i) for _, p, i in labels],
+        return_exceptions=True,
+    )
+    charts = []
+    for (label, period, interval), result in zip(labels, results):
+        if isinstance(result, Exception):
+            charts.append({"label": label, "period": period, "interval": interval, "error": str(result)})
+        else:
+            charts.append({"label": label, **result})
+    return {"symbol": symbol.upper(), "charts": charts}
+
+
 async def get_bars(symbol: str, period: str, interval: str) -> dict:
     """
     Fetch OHLCV bars for charting.
