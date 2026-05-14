@@ -133,13 +133,13 @@ _PERIOD_LABELS: dict[str, str] = {
 }
 _INTERVAL_LABELS: dict[str, str] = {
     "1m": "1-Min", "5m": "5-Min", "15m": "15-Min", "30m": "30-Min",
-    "1h": "Hourly", "1d": "Daily", "1wk": "Weekly", "1mo": "Monthly",
+    "1h": "60 Min", "1d": "Daily", "1wk": "Weekly", "1mo": "Monthly",
 }
 _DEFAULT_TIMEFRAMES = [
-    ("3y",  "1mo"),
-    ("2y",  "1wk"),
-    ("2mo", "1d"),
-    ("3d",  "1h"),
+    ("2mo", "1d"),   # top-left
+    ("2y",  "1wk"),  # top-right
+    ("3d",  "1h"),   # bottom-left
+    ("3y",  "1mo"),  # bottom-right
 ]
 
 

@@ -205,11 +205,12 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
     as a substitute.
 
     charts: optional list of {"period": str, "interval": str} dicts to
-    override the default timeframes. Omit for the four standard timeframes:
-      1. 3-Year Monthly   — long-term trend and major structure
-      2. 2-Year Weekly    — intermediate trend and swing structure
-      3. 2-Month Daily    — short-term trend and recent price action
-      4. 3-Day Hourly     — intraday detail and entry/exit context
+    override the default timeframes. Omit for the four standard timeframes
+    arranged in a 2×2 grid (top-left → top-right → bottom-left → bottom-right):
+      top-left:     2-Month Daily   — short-term trend and recent price action
+      top-right:    2-Year Weekly   — intermediate trend and swing structure
+      bottom-left:  3-Day 60 Min    — intraday detail and entry/exit context
+      bottom-right: 3-Year Monthly  — long-term trend and major structure
 
     Each entry in charts[] has label, symbol, period, interval, bar_count,
     data_source, last_bar_stale, and bars (OHLCV list, oldest-first).
