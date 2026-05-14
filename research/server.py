@@ -60,6 +60,12 @@ from research.tools.market_data import (
     get_bars            as _get_bars,
     get_full_timeframe  as _get_full_timeframe,
 )
+from research.tools.knowledge import (
+    search_knowledge          as _search_knowledge,
+    list_knowledge_categories as _list_knowledge_categories,
+    list_knowledge_documents  as _list_knowledge_documents,
+    get_knowledge_document    as _get_knowledge_document,
+)
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
@@ -231,6 +237,65 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
     - Do not use line charts unless the user explicitly asks.
     """
     return await _get_full_timeframe(symbol, charts)
+
+
+@mcp.tool()
+async def search_knowledge(
+    query: str,
+    categories: list[str] | None = None,
+    limit: int = 5,
+) -> dict:
+    """
+    Semantic search over the finance knowledge base.
+
+    Embeds the query and returns the most similar knowledge chunks ranked by
+    cosine similarity.  Use this to pull in domain knowledge — strategy notes,
+    macro context, risk frameworks — before or during analysis.
+
+    categories: optional list of category names to restrict results.
+        Common values: risk, market_risk, macro, strategy, technical,
+        sentiment, earnings, sector, valuation, options, inference, methodology.
+        Call list_knowledge_categories to see all available categories and counts.
+
+    Returns chunks with content, source document title, source_url, categories,
+    and similarity score.
+    """
+    return await _search_knowledge(query, categories=categories, limit=limit)
+
+
+@mcp.tool()
+async def list_knowledge_categories() -> list[dict]:
+    """
+    List all categories in the knowledge base with chunk counts.
+
+    Returns seeded categories (risk, macro, strategy, etc.) and any
+    auto-discovered categories.  Use category names with search_knowledge
+    to scope queries to a specific domain.
+    """
+    return await _list_knowledge_categories()
+
+
+@mcp.tool()
+async def list_knowledge_documents() -> list[dict]:
+    """
+    List all documents ingested into the knowledge base.
+
+    Returns document id, title, source_url, creation date, and chunk count.
+    Use document ids with get_knowledge_document to retrieve full chunk text.
+    """
+    return await _list_knowledge_documents()
+
+
+@mcp.tool()
+async def get_knowledge_document(document_id: int) -> dict:
+    """
+    Retrieve all chunks for a specific knowledge document.
+
+    Returns the document title, source_url, and every chunk with its content
+    and categories.  Use search_knowledge when you want targeted passages
+    instead of an entire document.
+    """
+    return await _get_knowledge_document(document_id)
 
 
 def main() -> None:

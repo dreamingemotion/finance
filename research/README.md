@@ -25,6 +25,15 @@ research/
 | `search_filing(query, doc_id)` | Navigate structure, identify relevant sections, return cited passages. |
 | `batch_query(query, doc_ids)` | Run `search_filing` in parallel across multiple filings. |
 
+### Knowledge base (read-only)
+
+| Tool | Description |
+|---|---|
+| `search_knowledge(query, categories?, limit?)` | Semantic search over the finance knowledge base. Returns ranked chunks with similarity scores. |
+| `list_knowledge_categories()` | List all categories (risk, macro, strategy, etc.) with chunk counts. |
+| `list_knowledge_documents()` | List all ingested documents with chunk counts. |
+| `get_knowledge_document(document_id)` | Retrieve all chunks for a document. |
+
 ## Setup
 
 ### Install dependencies
@@ -40,7 +49,8 @@ pip install -r requirements.txt
 | Variable | Required | Description |
 |---|---|---|
 | `EDGAR_USER_AGENT` | Yes | SEC requires this, e.g. `"Name email@example.com"` |
-| `OPENROUTER_API_KEY` | Yes | Used for search reasoning (section relevance) |
+| `KNOWLEDGE_DATABASE_URL` | Yes (knowledge tools) | PostgreSQL DSN shared with finance-knowledge, e.g. `postgresql://user:pass@10.0.0.139:5432/finance` |
+| `OPENROUTER_API_KEY` | Yes | Used for search reasoning (section relevance) and knowledge query embeddings |
 | `OPENROUTER_BASE_URL` | No | Default: `https://openrouter.ai/api/v1` |
 | `GENERATION_MODEL` | No | Default: `anthropic/claude-sonnet-4-6` |
 | `RESEARCH_WORKSPACE` | No | PageIndex workspace dir. Default: `./workspace` |
@@ -80,6 +90,7 @@ Add these to `/etc/finance.env` alongside the existing entries:
 
 ```
 EDGAR_USER_AGENT=YourName your@email.com
+KNOWLEDGE_DATABASE_URL=<same value as finance-knowledge server>
 RESEARCH_WORKSPACE=/opt/agents/finance/research/workspace
 RESEARCH_HOST=0.0.0.0
 RESEARCH_PORT=8093
