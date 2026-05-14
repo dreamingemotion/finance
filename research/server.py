@@ -215,13 +215,15 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
     Each entry in charts[] has label, symbol, period, interval, bar_count,
     data_source, last_bar_stale, and bars (OHLCV list, oldest-first).
 
+    Each chart entry includes render_order (0-based integer) and grid_position
+    ("top-left", "top-right", "bottom-left", "bottom-right") fields.
+
     Rendering rules (follow exactly — do not override):
     - Render as candlestick charts in a 2×2 grid.
-    - Preserve the exact array order: index 0 = top-left, 1 = top-right,
-      2 = bottom-left, 3 = bottom-right.
+    - Sort charts by render_order and place each at its grid_position.
+      Never reorder by timeframe length or any other logic.
     - Use each chart's label field verbatim as the chart title. Do not
-      rename, translate, or substitute your own label (e.g. do not replace
-      "60 Min" with "Hourly" or reorder from monthly→weekly→daily→hourly).
+      rename or substitute (e.g. do not replace "60 Min" with "Hourly").
     - Do not use line charts unless the user explicitly asks.
     """
     return await _get_full_timeframe(symbol, charts)

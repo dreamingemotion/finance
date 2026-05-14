@@ -159,12 +159,14 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
         *[get_bars(symbol, p, i) for p, i in timeframes],
         return_exceptions=True,
     )
+    _positions = ["top-left", "top-right", "bottom-left", "bottom-right"]
     out = []
-    for label, (period, interval), result in zip(labels, timeframes, results):
+    for idx, (label, (period, interval), result) in enumerate(zip(labels, timeframes, results)):
+        pos = _positions[idx] if idx < len(_positions) else f"position-{idx + 1}"
         if isinstance(result, Exception):
-            out.append({"label": label, "period": period, "interval": interval, "error": str(result)})
+            out.append({"render_order": idx, "grid_position": pos, "label": label, "period": period, "interval": interval, "error": str(result)})
         else:
-            out.append({"label": label, **result})
+            out.append({"render_order": idx, "grid_position": pos, "label": label, **result})
     return {"symbol": symbol.upper(), "charts": out}
 
 
