@@ -126,29 +126,46 @@ async def get_snapshot(symbol: str) -> dict:
 # get_bars
 # ---------------------------------------------------------------------------
 
-async def get_full_timeframe(symbol: str) -> dict:
-    """
-    Fetch four standard timeframes for full continuity analysis.
+_PERIOD_LABELS: dict[str, str] = {
+    "1d": "1-Day", "3d": "3-Day", "5d": "5-Day",
+    "1mo": "1-Month", "2mo": "2-Month", "3mo": "3-Month", "6mo": "6-Month",
+    "1y": "1-Year", "2y": "2-Year", "3y": "3-Year", "5y": "5-Year", "10y": "10-Year",
+}
+_INTERVAL_LABELS: dict[str, str] = {
+    "1m": "1-Min", "5m": "5-Min", "15m": "15-Min", "30m": "30-Min",
+    "1h": "Hourly", "1d": "Daily", "1wk": "Weekly", "1mo": "Monthly",
+}
+_DEFAULT_TIMEFRAMES = [
+    ("3y",  "1mo"),
+    ("2y",  "1wk"),
+    ("2mo", "1d"),
+    ("3d",  "1h"),
+]
 
-    Runs all four get_bars calls in parallel.
+
+async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> dict:
     """
+    Fetch multiple timeframes for continuity analysis in parallel.
+
+    charts: optional list of {"period": str, "interval": str} to override
+    the defaults. Omit to use the four standard timeframes.
+    """
+    timeframes = [(c["period"], c["interval"]) for c in charts] if charts else _DEFAULT_TIMEFRAMES
     labels = [
-        ("3-Year Monthly",   "3y",  "1mo"),
-        ("2-Year Weekly",    "2y",  "1wk"),
-        ("2-Month Daily",    "2mo", "1d"),
-        ("3-Day Hourly",     "3d",  "1h"),
+        f"{_PERIOD_LABELS.get(p, p)} {_INTERVAL_LABELS.get(i, i)}"
+        for p, i in timeframes
     ]
     results = await asyncio.gather(
-        *[get_bars(symbol, p, i) for _, p, i in labels],
+        *[get_bars(symbol, p, i) for p, i in timeframes],
         return_exceptions=True,
     )
-    charts = []
-    for (label, period, interval), result in zip(labels, results):
+    out = []
+    for label, (period, interval), result in zip(labels, timeframes, results):
         if isinstance(result, Exception):
-            charts.append({"label": label, "period": period, "interval": interval, "error": str(result)})
+            out.append({"label": label, "period": period, "interval": interval, "error": str(result)})
         else:
-            charts.append({"label": label, **result})
-    return {"symbol": symbol.upper(), "charts": charts}
+            out.append({"label": label, **result})
+    return {"symbol": symbol.upper(), "charts": out}
 
 
 async def get_bars(symbol: str, period: str, interval: str) -> dict:

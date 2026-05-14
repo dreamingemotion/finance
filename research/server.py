@@ -197,14 +197,15 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
 
 
 @mcp.tool()
-async def get_full_timeframe(symbol: str) -> dict:
+async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> dict:
     """
-    ALWAYS call this tool — never get_bars — when the user requests any of:
-    "full timeframe", "full timeframe continuity", "full timeframe continuity
-    analysis", or any multi-timeframe chart request for a single symbol.
-    Do NOT call get_bars multiple times as a substitute.
+    ALWAYS call this tool — never get_bars — when the user wants a
+    multi-timeframe overview, continuity analysis, or asks to see a symbol
+    across multiple timeframes at once. Do NOT call get_bars multiple times
+    as a substitute.
 
-    Returns four chart datasets fetched in parallel with fixed timeframes:
+    charts: optional list of {"period": str, "interval": str} dicts to
+    override the default timeframes. Omit for the four standard timeframes:
       1. 3-Year Monthly   — long-term trend and major structure
       2. 2-Year Weekly    — intermediate trend and swing structure
       3. 2-Month Daily    — short-term trend and recent price action
@@ -213,10 +214,10 @@ async def get_full_timeframe(symbol: str) -> dict:
     Each entry in charts[] has label, symbol, period, interval, bar_count,
     data_source, last_bar_stale, and bars (OHLCV list, oldest-first).
 
-    Always render all four charts as candlestick charts in a 2×2 grid
-    or vertical stack. Do not use line charts unless the user asks.
+    Always render all charts as candlestick charts in a 2×2 grid or vertical
+    stack. Do not use line charts unless the user asks.
     """
-    return await _get_full_timeframe(symbol)
+    return await _get_full_timeframe(symbol, charts)
 
 
 def main() -> None:
