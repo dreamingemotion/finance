@@ -39,10 +39,10 @@ async def get_quote(symbol: str) -> dict:
     data_source, and stale flag.
     """
     try:
-        data = await _tt.get_quote(symbol)
+        data = await asyncio.wait_for(_tt.get_quote(symbol), timeout=8.0)
         data_source = "primary"
     except Exception as exc:
-        logger.warning("tastytrade get_quote failed for %s: %s — falling back to yfinance", symbol, exc)
+        logger.warning("tastytrade get_quote failed for %s: %r — falling back to yfinance", symbol, exc)
         data = await _yf.get_quote(symbol)
         data_source = "secondary"
 
@@ -78,8 +78,8 @@ async def get_snapshot(symbol: str) -> dict:
     """
     # P/B always comes from yfinance; fetch in parallel with tastytrade data
     results = await asyncio.gather(
-        _tt.get_quote(symbol),
-        _tt.get_metrics(symbol),
+        asyncio.wait_for(_tt.get_quote(symbol),   timeout=8.0),
+        asyncio.wait_for(_tt.get_metrics(symbol), timeout=8.0),
         _yf.get_pb_ratio(symbol),
         return_exceptions=True,
     )
@@ -95,7 +95,7 @@ async def get_snapshot(symbol: str) -> dict:
         merged = {**tt_quote, **tt_metrics}
     else:
         exc = tt_quote if isinstance(tt_quote, Exception) else tt_metrics
-        logger.warning("tastytrade snapshot failed for %s: %s — falling back to yfinance", symbol, exc)
+        logger.warning("tastytrade snapshot failed for %s: %r — falling back to yfinance", symbol, exc)
         yf_quote, yf_metrics = await asyncio.gather(
             _yf.get_quote(symbol),
             _yf.get_metrics(symbol),
