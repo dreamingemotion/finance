@@ -217,12 +217,14 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
         except Exception:
             pass
 
+    _intraday = {"1m", "5m", "15m", "30m", "1h"}
     return {
-        "symbol":         symbol,
-        "period":         period,
-        "interval":       interval,
-        "bar_count":      len(bars),
-        "data_source":    data_source,
-        "last_bar_stale": last_stale,
-        "bars":           bars,
+        "symbol":              symbol,
+        "period":              period,
+        "interval":            interval,
+        "bar_count":           len(bars),
+        "data_source":         data_source,
+        "last_bar_stale":      last_stale,
+        "suppress_time_gaps":  interval in _intraday,
+        "bars":                bars,
     }

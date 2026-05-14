@@ -186,12 +186,14 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     interval — bar width:        1m 5m 15m 30m 1h 1d 1wk 1mo
 
     Returns bars (list of {time, open, high, low, close, volume}),
-    bar_count, data_source, and last_bar_stale.
+    bar_count, data_source, last_bar_stale, and suppress_time_gaps.
     Bars are sorted oldest-first so they can be passed directly to a
     chart library.  tastytrade DXLink is primary; yfinance is the fallback.
 
     Always render the result as a candlestick chart using the OHLCV fields,
     unless the user explicitly requests a different chart type.
+    When suppress_time_gaps is true, use a categorical or sequential index
+    x-axis (not a datetime axis) so overnight and weekend gaps are not shown.
     """
     return await _get_bars(symbol, period, interval)
 
@@ -224,6 +226,8 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
       Never reorder by timeframe length or any other logic.
     - Use each chart's label field verbatim as the chart title. Do not
       rename or substitute (e.g. do not replace "60 Min" with "Hourly").
+    - When a chart's suppress_time_gaps is true, use a categorical or
+      sequential index x-axis so overnight and weekend gaps are not shown.
     - Do not use line charts unless the user explicitly asks.
     """
     return await _get_full_timeframe(symbol, charts)
