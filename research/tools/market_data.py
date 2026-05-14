@@ -189,7 +189,7 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     data_source = "primary"
 
     try:
-        bars = await _tt.get_bars(symbol, period, interval)
+        bars = await asyncio.wait_for(_tt.get_bars(symbol, period, interval), timeout=4.0)
         if not bars:
             raise ValueError("tastytrade returned zero bars")
     except Exception as exc:
