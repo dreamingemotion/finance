@@ -39,7 +39,7 @@ async def get_quote(symbol: str) -> dict:
     data_source, and stale flag.
     """
     try:
-        data = await asyncio.wait_for(_tt.get_quote(symbol), timeout=8.0)
+        data = await _tt.get_quote(symbol)
         data_source = "primary"
     except Exception as exc:
         logger.warning("tastytrade get_quote failed for %s: %r — falling back to yfinance", symbol, exc)
@@ -78,8 +78,8 @@ async def get_snapshot(symbol: str) -> dict:
     """
     # P/B always comes from yfinance; fetch in parallel with tastytrade data
     results = await asyncio.gather(
-        asyncio.wait_for(_tt.get_quote(symbol),   timeout=8.0),
-        asyncio.wait_for(_tt.get_metrics(symbol), timeout=8.0),
+        _tt.get_quote(symbol),
+        _tt.get_metrics(symbol),
         _yf.get_pb_ratio(symbol),
         return_exceptions=True,
     )
@@ -189,7 +189,7 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
     data_source = "primary"
 
     try:
-        bars = await asyncio.wait_for(_tt.get_bars(symbol, period, interval), timeout=4.0)
+        bars = await _tt.get_bars(symbol, period, interval)
         if not bars:
             raise ValueError("tastytrade returned zero bars")
     except Exception as exc:
