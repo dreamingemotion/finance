@@ -177,7 +177,10 @@ async def get_snapshot(symbol: str) -> dict:
 @mcp.tool()
 async def get_bars(symbol: str, period: str, interval: str) -> dict:
     """
-    Fetch OHLCV bars for charting.
+    Fetch OHLCV bars for a single timeframe.
+
+    For "full timeframe", "full timeframe continuity", or any multi-timeframe
+    request, use get_full_timeframe instead — do NOT call this tool multiple times.
 
     period   — look-back window: 1d 5d 1mo 3mo 6mo 1y 2y 5y 10y
     interval — bar width:        1m 5m 15m 30m 1h 1d 1wk 1mo
@@ -196,12 +199,12 @@ async def get_bars(symbol: str, period: str, interval: str) -> dict:
 @mcp.tool()
 async def get_full_timeframe(symbol: str) -> dict:
     """
-    Fetch four standard timeframes for full timeframe continuity analysis.
+    ALWAYS call this tool — never get_bars — when the user requests any of:
+    "full timeframe", "full timeframe continuity", "full timeframe continuity
+    analysis", or any multi-timeframe chart request for a single symbol.
+    Do NOT call get_bars multiple times as a substitute.
 
-    Use this tool when the user asks for "full timeframe", "full timeframe
-    continuity", or "full timeframe continuity analysis".
-
-    Returns four chart datasets fetched in parallel:
+    Returns four chart datasets fetched in parallel with fixed timeframes:
       1. 3-Year Monthly   — long-term trend and major structure
       2. 2-Year Weekly    — intermediate trend and swing structure
       3. 2-Month Daily    — short-term trend and recent price action
@@ -210,9 +213,8 @@ async def get_full_timeframe(symbol: str) -> dict:
     Each entry in charts[] has label, symbol, period, interval, bar_count,
     data_source, last_bar_stale, and bars (OHLCV list, oldest-first).
 
-    Always render all four charts as candlestick charts arranged in a
-    layout that makes sense for the display context (e.g. vertical stack
-    or 2×2 grid). Do not use line charts unless the user asks.
+    Always render all four charts as candlestick charts in a 2×2 grid
+    or vertical stack. Do not use line charts unless the user asks.
     """
     return await _get_full_timeframe(symbol)
 
