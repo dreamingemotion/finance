@@ -1,29 +1,68 @@
 # finance-research MCP
 
-Research MCP server. Currently provides structure-first SEC filing analysis;
-additional tool modules will be added here over time.
+Research MCP server providing stock analysis, SEC filing research, market
+data, valuation history, and knowledge base queries.
 
 ## Architecture
 
 ```
 research/
-├── server.py            # FastMCP + Starlette, same auth pattern as finance-knowledge
-├── edgar.py             # EDGAR REST API: ticker → CIK, find filing, download PDF
-├── pageindex_client.py  # Async wrapper around the PageIndex SDK
+├── server.py              # FastMCP + Starlette, same auth pattern as finance-knowledge
+├── edgar.py               # EDGAR REST API: ticker → CIK, find filing, download HTML
+├── html_to_markdown.py    # HTML → Markdown conversion for filings
+├── indexer.py             # Builds hierarchical tree index from filing markdown
+├── tree_store.py          # JSON-on-disk store for indexed filing trees
+├── tree_search.py         # Keyword + LLM reasoning search over filing trees
 └── tools/
-    └── sec_filings.py   # Six SEC filing tools (first tool module)
+    ├── analysis.py        # analyze() — full and partial stock analysis aggregator
+    ├── valuation.py       # get_valuation_ratios() — 10-year P/E and P/B via EDGAR XBRL
+    ├── market_data.py     # get_quote, get_snapshot, get_bars, get_full_timeframe
+    ├── sec_filings.py     # submit_filing, search_filing, get_section, batch_query, etc.
+    └── knowledge.py       # search_knowledge, list_knowledge_categories, etc.
 ```
 
 ## Tools
 
+### Analysis
+
 | Tool | Description |
 |---|---|
-| `submit_filing(ticker, form_type, year)` | Download PDF from EDGAR and index with PageIndex. Returns `doc_id`. Cached after first call. |
-| `get_filing_status(doc_id)` | Check PageIndex processing status for a filing. |
-| `get_filing_structure(doc_id)` | Return the full hierarchical section tree (node_ids, titles, page ranges, summaries). |
-| `get_section(doc_id, node_id)` | Fetch full text of a section by node_id. |
-| `search_filing(query, doc_id)` | Navigate structure, identify relevant sections, return cited passages. |
+| `analyze(symbol, full=True)` | **Start here.** Full or partial stock analysis — aggregates snapshot, charts, SEC filing (risks/moat/cashflow), valuation ratios, and knowledge base context in one call. |
+| `get_valuation_ratios(symbol)` | 10-year P/E and P/B history from EDGAR XBRL + current sector ETF benchmark. |
+
+**Full analysis** (`full=True`, default) includes:
+- Real-time snapshot (price, P/E, P/B, IV rank, HV, beta, market cap, dividend yield)
+- 2×2 multi-timeframe candlestick chart grid (2M daily, 2Y weekly, 3D 60-min, 3Y monthly)
+- Most recent 10-K from EDGAR, searched for risk factors, economic moat, and cash flow
+- 10-year P/E and P/B history with averages, current values, and sector ETF benchmark
+- Relevant knowledge base context
+
+**Partial analysis** (`full=False`) includes:
+- Real-time snapshot
+- 1-year weekly candlestick chart
+- 10-year P/E history and sector benchmark (no P/B, no filing)
+- Knowledge base context
+
+### Market data
+
+| Tool | Description |
+|---|---|
+| `get_quote(symbol)` | Real-time price, bid/ask/mark, day OHLCV, volume. |
+| `get_snapshot(symbol)` | Quote + full metrics: P/E, P/B, IV rank, HV 30/60-day, beta, market cap, dividend yield, borrow rate. |
+| `get_bars(symbol, period, interval)` | OHLCV bars for a single timeframe. period: 1d–10y. interval: 1m–1mo. |
+| `get_full_timeframe(symbol, charts?)` | Multi-timeframe chart data (2×2 grid by default). Use instead of multiple get_bars calls. |
+
+### SEC filings
+
+| Tool | Description |
+|---|---|
+| `submit_filing(ticker, form_type, year)` | Download filing HTML from EDGAR and index it locally. Returns `doc_id`. Cached after first call. |
+| `get_filing_structure(doc_id)` | Full hierarchical section tree (node_ids, titles, summaries). |
+| `get_section(doc_id, node_id)` | Full text of a section by node_id. |
+| `search_filing(query, doc_id)` | Search a filing for relevant sections. Returns cited passages. |
 | `batch_query(query, doc_ids)` | Run `search_filing` in parallel across multiple filings. |
+| `list_filings()` | List all filings indexed in the local workspace. |
+| `delete_filing(doc_id)` | Remove an indexed filing from the workspace. |
 
 ### Knowledge base (read-only)
 
@@ -49,16 +88,19 @@ pip install -r requirements.txt
 | Variable | Required | Description |
 |---|---|---|
 | `EDGAR_USER_AGENT` | Yes | SEC requires this, e.g. `"Name email@example.com"` |
-| `KNOWLEDGE_DATABASE_URL` | Yes (knowledge tools) | PostgreSQL DSN shared with finance-knowledge, e.g. `postgresql://user:pass@10.0.0.139:5432/finance` |
-| `OPENROUTER_API_KEY` | Yes | Used for search reasoning (section relevance) and knowledge query embeddings |
+| `KNOWLEDGE_DATABASE_URL` | Yes (knowledge + analysis tools) | PostgreSQL DSN shared with finance-knowledge, e.g. `postgresql://user:pass@10.0.0.139:5432/finance` |
+| `OPENROUTER_API_KEY` | Yes | Used for filing search reasoning and knowledge query embeddings |
 | `OPENROUTER_BASE_URL` | No | Default: `https://openrouter.ai/api/v1` |
 | `GENERATION_MODEL` | No | Default: `anthropic/claude-sonnet-4-6` |
-| `RESEARCH_WORKSPACE` | No | PageIndex workspace dir. Default: `./workspace` |
+| `RESEARCH_WORKSPACE` | No | Filing index workspace dir. Default: `./workspace` |
 | `RESEARCH_HOST` | No | Bind host. Default: `0.0.0.0` |
 | `RESEARCH_PORT` | No | Bind port. Default: `8093` |
 | `RESEARCH_URL` | Auth only | Public base URL of this server |
 | `JWT_SECRET` | Auth only | Shared with auth server |
 | `AUTH_SERVER_URL` | Auth only | Public URL of auth server |
+| `TT_CLIENT_ID` | No | Tastytrade OAuth client ID (market data primary source) |
+| `TT_CLIENT_SECRET` | No | Tastytrade OAuth client secret |
+| `TT_REFRESH_TOKEN` | No | Tastytrade OAuth refresh token |
 
 PageIndex uses LiteLLM internally. Route it through OpenRouter by also setting:
 
@@ -165,23 +207,30 @@ Claude will prompt you to authenticate via OAuth on first connection.
 ## Usage
 
 ```
-# 1. Ingest a filing (slow first time, instant on repeat)
+# Full stock analysis (default)
+analyze("PLTR")
+→ { snapshot, price_structure, valuation, filing, knowledge }
+
+# Partial analysis (no filing, 1Y weekly chart only)
+analyze("PLTR", full=False)
+→ { snapshot, price_structure (1Y weekly), valuation (P/E only), knowledge }
+
+# Standalone valuation history
+get_valuation_ratios("AAPL")
+→ { pe_history (10y), pe_average, pe_current, pb_history (10y), pb_average,
+    pb_current, sector_benchmark: { etf, sector_pe, sector_pb } }
+
+# Ingest and search a filing
 submit_filing("BLK", "10-K", 2024)
-→ { doc_id: "abc123", ticker: "BLK", filing_date: "2024-02-23", page_count: 212 }
+→ { doc_id: "abc123", ticker: "BLK", filing_date: "2024-02-23" }
 
-# 2. Explore the structure
 get_filing_structure("abc123")
-→ { structure: [{ title: "Item 1A: Risk Factors", node_id: "0012", ... }] }
+→ { overview: [{ title: "Item 1A: Risk Factors", node_id: "0012", ... }] }
 
-# 3. Read a specific section
-get_section("abc123", "0012")
-→ { section_title: "Item 1A: Risk Factors", full_text: "...", word_count: 4250, pages: "23-45" }
-
-# 4. Search within a filing
 search_filing("liquidity risk", "abc123")
-→ { passages: [{ text: "...", section: "Item 1A", pages: "23-25" }] }
+→ { passages: [{ text: "...", section: "Item 1A", node_id: "0012" }] }
 
-# 5. Compare across companies
+# Compare across companies
 batch_query("liquidity risk", ["abc123", "def456"])
 → { results: { "abc123": { passages: [...] }, "def456": { passages: [...] } } }
 ```
