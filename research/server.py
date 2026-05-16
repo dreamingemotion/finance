@@ -288,7 +288,15 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       - valuation: P/E history and sector benchmark only (no P/B data).
       No filing is fetched for partial analysis.
 
-    After receiving the result, synthesise the following sections:
+    After receiving the result, synthesise directly from the returned data.
+    Do NOT search the web, call other tools, or look up additional data —
+    everything needed is already in the response:
+      - Historical and current P/E, P/B, and sector benchmarks are in valuation.
+      - Risk factors, moat, and cash flow are in filing.
+      - Real-time price and metrics are in snapshot.
+      - Chart data for all timeframes is in price_structure.
+
+    Synthesise the following sections:
       1. Price Structure — support/resistance on the higher timeframes,
          trend direction, and notable technical context.
       2. Snapshot — current valuation, volatility, and positioning metrics.
