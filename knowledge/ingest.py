@@ -5,12 +5,14 @@ Calls Claude via OpenRouter in two parallel passes:
   1. Factual pass  — discrete claims, data points, and observations
   2. Inference pass — methodologies, causal chains, comparisons, non-obvious inferences
 
-Both sets of chunks are embedded in a single batched call and stored atomically
-under the same document ID.
+Before the extraction passes, a cheap classification call determines whether the
+inference pass is warranted. Both extraction chunks are embedded in a single
+batched call and stored atomically under the same document ID.
 
 Environment variables:
-  OPENROUTER_API_KEY  your OpenRouter API key
-  GENERATION_MODEL    anthropic/claude-sonnet-4-6 (default)
+  OPENROUTER_API_KEY    your OpenRouter API key
+  GENERATION_MODEL      anthropic/claude-sonnet-4-6 (default)
+  CLASSIFICATION_MODEL  google/gemini-flash-2.0 (default)
 """
 from __future__ import annotations
 
@@ -40,6 +42,22 @@ Rules:
 
 Respond with a JSON array only — no explanation, no markdown fences:
 [{"content": "...", "categories": ["cat1", "cat2"]}]"""
+
+_CLASSIFICATION_SYSTEM_PROMPT = """\
+Classify whether a document warrants higher-order inference analysis.
+
+Return {"run_inference": true} if the document contains any of:
+- Analysis, commentary, or interpretation
+- Causal reasoning or if-then logic
+- Comparisons between assets, strategies, or time periods
+- Forward-looking statements or conclusions
+
+Return {"run_inference": false} if the document is purely factual data with no commentary:
+- Raw price or volume tables
+- Earnings releases with only numbers and no commentary
+- Data exports or structured records with no narrative
+
+Respond with JSON only — no explanation, no markdown fences."""
 
 _INFERENCE_SYSTEM_PROMPT = """\
 You are a financial research analyst performing deep inference on articles.
@@ -103,12 +121,32 @@ async def _extract(system_prompt: str, content: str, title: str) -> list[dict]:
     return json.loads(raw)
 
 
+async def _classify_inference(content: str, title: str) -> bool:
+    client = _make_client()
+    model = os.environ.get("CLASSIFICATION_MODEL", "google/gemini-flash-2.0")
+
+    response = await client.chat.completions.create(
+        model=model,
+        temperature=0.0,
+        messages=[
+            {"role": "system", "content": _CLASSIFICATION_SYSTEM_PROMPT},
+            {"role": "user", "content": f"Article title: {title}\n\n{content}"},
+        ],
+    )
+
+    raw = response.choices[0].message.content.strip()
+    if raw.startswith("```"):
+        raw = raw.split("\n", 1)[1].rsplit("```", 1)[0].strip()
+    return json.loads(raw)["run_inference"]
+
+
 async def ingest_document(
     db,
     title: str,
     content: str,
     source_url: str | None = None,
     overwrite: bool = False,
+    run_inference: bool | None = None,
 ) -> dict:
     """
     Full ingestion pipeline:
@@ -144,10 +182,17 @@ async def ingest_document(
             "DELETE FROM knowledge.documents WHERE id = $1", existing["id"]
         )
 
-    factual_chunks, inference_chunks = await asyncio.gather(
-        _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
-        _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
-    )
+    if run_inference is None:
+        run_inference = await _classify_inference(content, title)
+
+    if run_inference:
+        factual_chunks, inference_chunks = await asyncio.gather(
+            _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
+            _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
+        )
+    else:
+        factual_chunks = await _extract(_FACTUAL_SYSTEM_PROMPT, content, title)
+        inference_chunks = []
 
     all_chunks = factual_chunks + inference_chunks
     if not all_chunks:
@@ -157,6 +202,7 @@ async def ingest_document(
             "chunks_stored": 0,
             "factual_chunks": 0,
             "inference_chunks": 0,
+            "inference_run": run_inference,
             "new_categories": [],
         }
 
@@ -209,5 +255,6 @@ async def ingest_document(
         "chunks_stored": len(all_chunks),
         "factual_chunks": len(factual_chunks),
         "inference_chunks": len(inference_chunks),
+        "inference_run": run_inference,
         "new_categories": sorted(new_categories),
     }

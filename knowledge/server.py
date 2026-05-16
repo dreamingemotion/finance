@@ -52,8 +52,10 @@ async def ingest_document(
     """
     Ingest a document into the knowledge base.
 
-    Runs two parallel extraction passes (factual + inference), embeds all
-    chunks, and stores everything with category tags.
+    Runs a factual extraction pass. A cheap classification call automatically
+    determines whether a second inference pass (methodologies, causal chains,
+    comparisons, non-obvious conclusions) is warranted — it is skipped for
+    purely factual content such as raw price tables or data exports.
 
     Call this after reading a file the user has uploaded. Pass the full text
     as content and a descriptive title. source_url is optional.
