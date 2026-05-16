@@ -274,6 +274,9 @@ async def analyze(symbol: str, full: bool = True) -> dict:
         competitive moat / business model, and cash flow.  Indexing a filing
         for the first time may take several minutes.
       - knowledge: semantically relevant chunks from the finance knowledge base.
+      - valuation: full get_valuation_ratios result — 10-year P/E and P/B
+        history, pe_average, pb_average, pe_current, pb_current, and
+        sector_benchmark (sector ETF P/E and P/B).
 
     full=False (partial): use when the user explicitly requests a partial
     analysis or a quick overview.
@@ -281,18 +284,22 @@ async def analyze(symbol: str, full: bool = True) -> dict:
         Render as a candlestick chart; apply suppress_time_gaps if true.
       - snapshot: same as full.
       - knowledge: same as full.
+      - valuation: P/E history and sector benchmark only (no P/B data).
       No filing is fetched for partial analysis.
 
     After receiving the result, synthesise the following sections:
       1. Price Structure — support/resistance on the higher timeframes,
          trend direction, and notable technical context.
       2. Snapshot — current valuation, volatility, and positioning metrics.
-      3. Risks — from the filing risk_factors search and knowledge base.
-      4. Economic Moat — competitive advantage assessment from the filing
+      3. Valuation — current P/E and P/B vs their 10-year averages (full),
+         or current P/E vs its 10-year average (partial); compare both against
+         the sector benchmark to assess relative valuation.
+      4. Risks — from the filing risk_factors search and knowledge base.
+      5. Economic Moat — competitive advantage assessment from the filing
          moat search (full only).
-      5. Cash Flow — free cash flow and capital allocation from the filing
+      6. Cash Flow — free cash flow and capital allocation from the filing
          (full only).
-      6. Knowledge Context — any relevant insights from the knowledge base.
+      7. Knowledge Context — any relevant insights from the knowledge base.
     """
     return await _analyze(symbol, full=full)
 
