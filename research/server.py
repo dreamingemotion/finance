@@ -266,9 +266,9 @@ async def analyze(symbol: str, full: bool = True) -> dict:
 
     full=True (default): use for any analysis request unless the user
     explicitly asks for a "partial" or "quick" overview.
-      - price_structure: 2×2 multi-timeframe chart grid from get_full_timeframe.
-        Render as candlestick charts using the grid_position and render_order
-        fields.  Apply suppress_time_gaps per chart.
+      - price_structure: 2×2 multi-timeframe chart grid. Each entry has
+        render_order, grid_position, label, suppress_time_gaps, and bars
+        (OHLCV list, oldest-first).
       - snapshot: real-time quote plus full metrics (P/E, P/B, IV rank, HV,
         beta, market cap, dividend yield, borrow rate).
       - filing: most recent 10-K from EDGAR, pre-searched for risk factors,
@@ -281,12 +281,28 @@ async def analyze(symbol: str, full: bool = True) -> dict:
 
     full=False (partial): use when the user explicitly requests a partial
     analysis or a quick overview.
-      - price_structure: single 1-year weekly candlestick chart from get_bars.
-        Render as a candlestick chart; apply suppress_time_gaps if true.
+      - price_structure: single 1-year weekly chart. Has suppress_time_gaps
+        and bars (OHLCV list, oldest-first).
       - snapshot: same as full.
       - knowledge: same as full.
       - valuation: P/E history and sector benchmark only (no P/B data).
       No filing is fetched for partial analysis.
+
+    Chart rendering rules (apply whenever rendering price_structure):
+      - Use raw HTML Canvas 2D API only. Do NOT use Chart.js,
+        chartjs-chart-financial, Plotly, D3, or any charting library.
+        Draw wicks and bodies manually with canvas.getContext("2d").
+      - Full analysis: render a 2×2 grid. Sort charts by render_order and
+        place each at its grid_position. Use the label field verbatim as
+        the chart title — do not rename or substitute.
+      - Partial analysis: render a single candlestick chart.
+      - When suppress_time_gaps is true, use a categorical/sequential index
+        x-axis — do not use a datetime axis.
+      - Before rendering, deduplicate bars: drop any bar where open === 0,
+        then deduplicate by composite key (time + open + close).
+      - Each chart must have mouseover tooltips showing date/time, O, H, L,
+        C, and % change. Position tooltips within the panel bounds.
+      - Do not render line charts unless the user explicitly asks.
 
     After receiving the result, synthesise directly from the returned data.
     Do NOT search the web, call other tools, or look up additional data —
