@@ -67,6 +67,7 @@ from research.tools.knowledge import (
     get_knowledge_document    as _get_knowledge_document,
 )
 from research.tools.analysis import analyze as _analyze
+from research.tools.valuation import get_valuation_ratios as _get_valuation_ratios
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
@@ -294,6 +295,40 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       6. Knowledge Context — any relevant insights from the knowledge base.
     """
     return await _analyze(symbol, full=full)
+
+
+@mcp.tool()
+async def get_valuation_ratios(symbol: str) -> dict:
+    """
+    10-year historical P/E and P/B ratios plus current sector benchmarks.
+
+    Data sources:
+      - EPS and book value: EDGAR XBRL company-facts API (structured, no filing
+        download needed). Covers 10+ years of annual 10-K data.
+      - Year-end stock prices: yfinance daily history matched to each fiscal
+        year-end date.
+      - Sector benchmark: SPDR sector ETF (XLK, XLF, XLV, etc.) P/E and P/B
+        via yfinance — market-cap-weighted sector proxy.
+
+    Returns:
+      pe_history: list of {year, fiscal_year_end, eps, price, pe} for each
+        available fiscal year. Loss years (negative EPS) have pe=null.
+      pe_average: arithmetic mean of positive P/E values over the period.
+      pe_current: trailing P/E from yfinance.
+      pb_history: list of {year, fiscal_year_end, equity_M, shares_M, bvps,
+        price, pb}. equity_M and shares_M are in millions.
+      pb_average: arithmetic mean of positive P/B values over the period.
+      pb_current: current P/B from yfinance.
+      sector_benchmark: {sector, etf, sector_pe, sector_pb}.
+      data_years: number of years available for P/E and P/B respectively.
+      notes: list of warnings (e.g. fallback EPS type, missing data).
+
+    Use pe_average and pb_average vs pe_current and pb_current to assess
+    whether the stock is trading at a premium or discount to its historical
+    range. Compare pe_current and pb_current against sector_benchmark to
+    assess relative valuation within the sector.
+    """
+    return await _get_valuation_ratios(symbol)
 
 
 @mcp.tool()
