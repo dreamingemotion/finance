@@ -66,6 +66,7 @@ from research.tools.knowledge import (
     list_knowledge_documents  as _list_knowledge_documents,
     get_knowledge_document    as _get_knowledge_document,
 )
+from research.tools.analysis import analyze as _analyze
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
@@ -253,6 +254,46 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
     - Do not use line charts unless the user explicitly asks.
     """
     return await _get_full_timeframe(symbol, charts)
+
+
+@mcp.tool()
+async def analyze(symbol: str, full: bool = True) -> dict:
+    """
+    Comprehensive stock analysis — aggregates market data, SEC filings, and
+    knowledge base context into a single structured result.
+
+    full=True (default): call this whenever the user asks for an "analysis" of
+    a stock without specifying partial.
+      - price_structure: 2×2 multi-timeframe chart grid from get_full_timeframe.
+        Render as candlestick charts using the grid_position and render_order
+        fields.  Apply suppress_time_gaps per chart.
+      - snapshot: real-time quote plus full metrics (P/E, P/B, IV rank, HV,
+        beta, market cap, dividend yield, borrow rate).
+      - filing: most recent 10-K from EDGAR, pre-searched for risk factors,
+        competitive moat / business model, and cash flow.  Indexing a filing
+        for the first time may take several minutes.
+      - knowledge: semantically relevant chunks from the finance knowledge base.
+
+    full=False (partial): use when the user explicitly requests a partial
+    analysis or a quick overview.
+      - price_structure: single 1-year weekly candlestick chart from get_bars.
+        Render as a candlestick chart; apply suppress_time_gaps if true.
+      - snapshot: same as full.
+      - knowledge: same as full.
+      No filing is fetched for partial analysis.
+
+    After receiving the result, synthesise the following sections:
+      1. Price Structure — support/resistance on the higher timeframes,
+         trend direction, and notable technical context.
+      2. Snapshot — current valuation, volatility, and positioning metrics.
+      3. Risks — from the filing risk_factors search and knowledge base.
+      4. Economic Moat — competitive advantage assessment from the filing
+         moat search (full only).
+      5. Cash Flow — free cash flow and capital allocation from the filing
+         (full only).
+      6. Knowledge Context — any relevant insights from the knowledge base.
+    """
+    return await _analyze(symbol, full=full)
 
 
 @mcp.tool()
