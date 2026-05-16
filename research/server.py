@@ -260,11 +260,12 @@ async def get_full_timeframe(symbol: str, charts: list[dict] | None = None) -> d
 @mcp.tool()
 async def analyze(symbol: str, full: bool = True) -> dict:
     """
-    Comprehensive stock analysis — aggregates market data, SEC filings, and
-    knowledge base context into a single structured result.
+    ALWAYS call this tool when the user asks for a stock analysis, company
+    analysis, or research on a ticker symbol.  Do NOT attempt to answer from
+    memory, read files, or search the web — this tool aggregates everything.
 
-    full=True (default): call this whenever the user asks for an "analysis" of
-    a stock without specifying partial.
+    full=True (default): use for any analysis request unless the user
+    explicitly asks for a "partial" or "quick" overview.
       - price_structure: 2×2 multi-timeframe chart grid from get_full_timeframe.
         Render as candlestick charts using the grid_position and render_order
         fields.  Apply suppress_time_gaps per chart.
