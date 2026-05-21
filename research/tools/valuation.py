@@ -168,6 +168,41 @@ async def get_valuation_ratios(symbol: str) -> dict:
 
     facts = xbrl_r.get("facts", {})
 
+    # --- Debt and cash ---
+    lt_noncurrent_entries = _annual_10k(facts, "LongTermDebtNoncurrent", "USD")
+    debt_current_entries  = _annual_10k(facts, "DebtCurrent", "USD")
+    lt_debt_entries       = _annual_10k(facts, "LongTermDebt", "USD")
+    cash_entries          = _annual_10k(facts, "CashAndCashEquivalentsAtCarryingValue", "USD")
+
+    lt_noncurrent_by_fy = {e["fy"]: e["val"] for e in lt_noncurrent_entries}
+    debt_current_by_fy  = {e["fy"]: e["val"] for e in debt_current_entries}
+    lt_debt_by_fy       = {e["fy"]: e["val"] for e in lt_debt_entries}
+    cash_by_fy          = {e["fy"]: e["val"] for e in cash_entries}
+
+    all_debt_fys = sorted(
+        set(lt_noncurrent_by_fy) | set(lt_debt_by_fy) | set(cash_by_fy)
+    )
+    debt_history: list[dict] = []
+    for fy in all_debt_fys:
+        # Prefer noncurrent + current split; fall back to LongTermDebt lump
+        lt   = lt_noncurrent_by_fy.get(fy)
+        curr = debt_current_by_fy.get(fy)
+        lt_all = lt_debt_by_fy.get(fy)
+        if lt is not None:
+            total = lt + (curr or 0)
+        elif lt_all is not None:
+            total = lt_all
+        else:
+            total = None
+        cash    = cash_by_fy.get(fy)
+        net_debt = (total - cash) if (total is not None and cash is not None) else None
+        debt_history.append({
+            "year":       fy,
+            "lt_debt_M":  _r(lt_all / 1e6, 1) if lt_all is not None else _r(total / 1e6, 1) if total is not None else None,
+            "cash_M":     _r(cash   / 1e6, 1) if cash  is not None else None,
+            "net_debt_M": _r(net_debt / 1e6, 1) if net_debt is not None else None,
+        })
+
     # --- Free cash flow components ---
     ocf_entries  = _annual_10k(facts, "NetCashProvidedByUsedInOperatingActivities", "USD")
     capex_entries = _annual_10k(facts, "PaymentsToAcquirePropertyPlantAndEquipment", "USD")
@@ -264,8 +299,9 @@ async def get_valuation_ratios(symbol: str) -> dict:
         "pb_average":       _r(sum(pb_vals) / len(pb_vals)) if pb_vals else None,
         "pb_current":       _r(info.get("price_to_book")) if isinstance(info, dict) else None,
         "fcf_history":      fcf_history,
+        "debt_history":     debt_history,
         "sector_benchmark": benchmark,
-        "data_years":       {"pe": len(pe_history), "pb": len(pb_history), "fcf": len(fcf_history)},
+        "data_years":       {"pe": len(pe_history), "pb": len(pb_history), "fcf": len(fcf_history), "debt": len(debt_history)},
         "data_source":      "EDGAR XBRL + yfinance",
         "notes":            notes,
     }

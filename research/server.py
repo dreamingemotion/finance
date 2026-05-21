@@ -354,8 +354,12 @@ async def get_valuation_ratios(symbol: str) -> dict:
         price, pb}. equity_M and shares_M are in millions.
       pb_average: arithmetic mean of positive P/B values over the period.
       pb_current: current P/B from yfinance.
+      fcf_history: list of {year, ocf_M, capex_M, fcf_M} in millions.
+      debt_history: list of {year, lt_debt_M, cash_M, net_debt_M} in millions.
+        lt_debt_M prefers LongTermDebtNoncurrent+DebtCurrent; falls back to LongTermDebt.
+        net_debt_M = lt_debt_M - cash_M.
       sector_benchmark: {sector, etf, sector_pe, sector_pb}.
-      data_years: number of years available for P/E and P/B respectively.
+      data_years: number of years available for P/E, P/B, FCF, and debt respectively.
       notes: list of warnings (e.g. fallback EPS type, missing data).
 
     Use pe_average and pb_average vs pe_current and pb_current to assess
