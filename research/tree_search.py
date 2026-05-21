@@ -178,9 +178,10 @@ async def _reasoning_search(
                 text = n["text"] or ""
                 results.append({
                     **n,
-                    "score":        10,
-                    "text_snippet": text[:400] + ("..." if len(text) > 400 else ""),
-                    "selected_by":  "llm_reasoning",
+                    "score":          10,
+                    "text_snippet":   text[:400] + ("..." if len(text) > 400 else ""),
+                    "selected_by":    "llm_reasoning",
+                    "reasoning_model": model,
                 })
 
         logger.info(f"LLM reasoning selected {len(results)} nodes for: {query[:60]}")

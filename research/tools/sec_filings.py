@@ -151,10 +151,14 @@ async def search_filing(query: str, doc_id: str) -> dict:
         }
         for r in results
     ]
+    reasoning_model = next(
+        (r["reasoning_model"] for r in results if "reasoning_model" in r), None
+    )
     return {
-        "query":   query,
-        "doc_id":  doc_id,
-        "passages": passages,
+        "query":           query,
+        "doc_id":          doc_id,
+        "passages":        passages,
+        "reasoning_model": reasoning_model,
     }
 
 
