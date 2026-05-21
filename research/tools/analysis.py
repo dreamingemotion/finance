@@ -90,10 +90,11 @@ async def analyze(symbol: str, full: bool = True) -> dict:
     doc_id = filing_meta.get("doc_id") if "error" not in filing_meta else None
 
     if doc_id:
-        risks, moat, cashflow = await asyncio.gather(
+        risks, moat, cashflow, segments = await asyncio.gather(
             search_filing("risk factors", doc_id),
             search_filing("competitive advantage economic moat business model", doc_id),
             search_filing("cash flow free cash flow capital allocation", doc_id),
+            search_filing("segment revenue operating income performance", doc_id),
             return_exceptions=True,
         )
         filing = {
@@ -101,6 +102,7 @@ async def analyze(symbol: str, full: bool = True) -> dict:
             "risks":    _ok(risks),
             "moat":     _ok(moat),
             "cashflow": _ok(cashflow),
+            "segments": _ok(segments),
         }
     else:
         filing = filing_meta

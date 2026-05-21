@@ -168,6 +168,24 @@ async def get_valuation_ratios(symbol: str) -> dict:
 
     facts = xbrl_r.get("facts", {})
 
+    # --- Free cash flow components ---
+    ocf_entries  = _annual_10k(facts, "NetCashProvidedByUsedInOperatingActivities", "USD")
+    capex_entries = _annual_10k(facts, "PaymentsToAcquirePropertyPlantAndEquipment", "USD")
+    capex_by_fy  = {e["fy"]: e["val"] for e in capex_entries}
+
+    fcf_history: list[dict] = []
+    for e in ocf_entries:
+        fy  = e["fy"]
+        ocf = e["val"]
+        capex = capex_by_fy.get(fy)
+        fcf   = (ocf - capex) if capex is not None else None
+        fcf_history.append({
+            "year":  fy,
+            "ocf_M": _r(ocf   / 1e6, 1),
+            "capex_M": _r(capex / 1e6, 1) if capex is not None else None,
+            "fcf_M": _r(fcf   / 1e6, 1) if fcf  is not None else None,
+        })
+
     # --- EPS: diluted preferred, basic as fallback ---
     eps_entries = _annual_10k(facts, "EarningsPerShareDiluted", "USD/shares")
     if not eps_entries:
@@ -245,8 +263,9 @@ async def get_valuation_ratios(symbol: str) -> dict:
         "pb_history":       pb_history,
         "pb_average":       _r(sum(pb_vals) / len(pb_vals)) if pb_vals else None,
         "pb_current":       _r(info.get("price_to_book")) if isinstance(info, dict) else None,
+        "fcf_history":      fcf_history,
         "sector_benchmark": benchmark,
-        "data_years":       {"pe": len(pe_history), "pb": len(pb_history)},
+        "data_years":       {"pe": len(pe_history), "pb": len(pb_history), "fcf": len(fcf_history)},
         "data_source":      "EDGAR XBRL + yfinance",
         "notes":            notes,
     }
