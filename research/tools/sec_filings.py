@@ -158,6 +158,7 @@ async def search_filing(query: str, doc_id: str) -> dict:
         "query":           query,
         "doc_id":          doc_id,
         "passages":        passages,
+        "search_method":   "llm_reasoning" if reasoning_model else "keyword",
         "reasoning_model": reasoning_model,
     }
 
