@@ -151,7 +151,10 @@ async def _reasoning_search(
 
     try:
         client = _openrouter()
-        model  = os.environ.get("GENERATION_MODEL", "anthropic/claude-sonnet-4-6")
+        model  = os.environ.get(
+            "REASONING_MODEL",
+            os.environ.get("GENERATION_MODEL", "anthropic/claude-haiku-4.5"),
+        )
         resp   = await client.chat.completions.create(
             model=model,
             temperature=0,
