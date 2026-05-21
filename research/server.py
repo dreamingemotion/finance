@@ -276,8 +276,9 @@ async def analyze(symbol: str, full: bool = True) -> dict:
         for the first time may take several minutes.
       - knowledge: semantically relevant chunks from the finance knowledge base.
       - valuation: full get_valuation_ratios result — 10-year P/E and P/B
-        history, pe_average, pb_average, pe_current, pb_current, and
-        sector_benchmark (sector ETF P/E and P/B).
+        history, pe_average, pb_average, pe_current, pb_current,
+        fcf_history (ocf_M, capex_M, fcf_M per year), debt_history
+        (lt_debt_M, cash_M, net_debt_M per year), and sector_benchmark.
 
     full=False (partial): use when the user explicitly requests a partial
     analysis or a quick overview.
@@ -310,8 +311,8 @@ async def analyze(symbol: str, full: bool = True) -> dict:
     After rendering the charts, synthesise directly from the returned data.
     Do NOT search the web, call other tools, or look up additional data —
     everything needed is already in the response:
-      - Historical and current P/E, P/B, and sector benchmarks are in valuation.
-      - Risk factors, moat, and cash flow are in filing.
+      - Historical and current P/E, P/B, FCF, and debt are in valuation.
+      - Risk factors, moat, cash flow, and segment performance are in filing.
       - Real-time price and metrics are in snapshot.
       - Chart data for all timeframes is in price_structure.
 
@@ -322,12 +323,16 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       3. Valuation — current P/E and P/B vs their 10-year averages (full),
          or current P/E vs its 10-year average (partial); compare both against
          the sector benchmark to assess relative valuation.
-      4. Risks — from the filing risk_factors search and knowledge base.
-      5. Economic Moat — competitive advantage assessment from the filing
+      4. Debt & Capital Structure — 10-year trend in long-term debt, cash,
+         and net debt from valuation.debt_history (full only).
+      5. Risks — from the filing risk_factors search and knowledge base.
+      6. Economic Moat — competitive advantage assessment from the filing
          moat search (full only).
-      6. Cash Flow — free cash flow and capital allocation from the filing
-         (full only).
-      7. Knowledge Context — any relevant insights from the knowledge base.
+      7. Cash Flow — free cash flow trend from valuation.fcf_history and
+         capital allocation context from the filing (full only).
+      8. Segment Performance — revenue and operating income by segment
+         from the filing (full only).
+      9. Knowledge Context — any relevant insights from the knowledge base.
     """
     return await _analyze(symbol, full=full)
 
