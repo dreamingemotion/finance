@@ -288,14 +288,17 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       - valuation: P/E history and sector benchmark only (no P/B data).
       No filing is fetched for partial analysis.
 
-    Chart rendering rules (apply whenever rendering price_structure):
+    Chart rendering rules (follow exactly — do not override):
+      - Full analysis ONLY: you MUST render the 2×2 candlestick grid before
+        writing any analysis text. Do NOT skip or defer chart rendering. Do
+        NOT call get_bars or get_full_timeframe separately — the data is
+        already in price_structure.charts. Sort by render_order and place
+        each chart at its grid_position. Use the label field verbatim as the
+        chart title — do not rename or substitute.
+      - Partial analysis: render a single candlestick chart from price_structure.
       - Use raw HTML Canvas 2D API only. Do NOT use Chart.js,
         chartjs-chart-financial, Plotly, D3, or any charting library.
         Draw wicks and bodies manually with canvas.getContext("2d").
-      - Full analysis: render a 2×2 grid. Sort charts by render_order and
-        place each at its grid_position. Use the label field verbatim as
-        the chart title — do not rename or substitute.
-      - Partial analysis: render a single candlestick chart.
       - When suppress_time_gaps is true, use a categorical/sequential index
         x-axis — do not use a datetime axis.
       - Before rendering, deduplicate bars: drop any bar where open === 0,
@@ -304,7 +307,7 @@ async def analyze(symbol: str, full: bool = True) -> dict:
         C, and % change. Position tooltips within the panel bounds.
       - Do not render line charts unless the user explicitly asks.
 
-    After receiving the result, synthesise directly from the returned data.
+    After rendering the charts, synthesise directly from the returned data.
     Do NOT search the web, call other tools, or look up additional data —
     everything needed is already in the response:
       - Historical and current P/E, P/B, and sector benchmarks are in valuation.
