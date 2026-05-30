@@ -388,6 +388,7 @@ async def get_market_analysis() -> dict:
     - Which sectors led and lagged and what the spread implies.
     - Whether the rotation pattern suggests risk-on or risk-off positioning.
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
+    - Incorporate any relevant insights from knowledge.sector.results.
 
     ── SECTION 3: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
@@ -411,6 +412,28 @@ async def get_market_analysis() -> dict:
     - Current curve shape (normal, flat, inverted, or humped) using curve_shape.
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
+    - Incorporate any relevant insights from knowledge.yields.results.
+
+    ── SECTION 4: VIX (vix) ─────────────────────────────────────────────────
+    vix contains current_level, prev_level, and day_change_pct. No chart.
+
+    After the yield analysis, add a short VIX commentary (2–3 sentences):
+    - State the current VIX level and day % change (e.g. "VIX rose 4.2% to 18.3").
+    - Characterise the implied volatility regime: <15 complacent, 15–20 normal,
+      20–30 elevated, >30 fear/crisis.
+    - Note whether VIX direction confirms or contradicts the equity price action.
+    - Incorporate any relevant insights from knowledge.volatility.results.
+
+    ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
+    knowledge contains three keys — sector, yields, volatility — each with
+    a results list of relevant knowledge base chunks (content, source, score).
+    Weave these insights into the opinion sections above rather than listing
+    them separately. Cite the source title when referencing a chunk.
+    If a knowledge section has an error or empty results, skip it silently.
+
+    After all sections, write a 2–3 sentence overall market summary tying
+    together the index moves, sector rotation, yield curve, and VIX into a
+    single coherent picture of the day's market character.
     """
     return await _get_market_analysis()
 

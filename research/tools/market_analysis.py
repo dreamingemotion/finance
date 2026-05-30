@@ -1,13 +1,16 @@
 """
-Market analysis tool — daily overview of major indexes, S&P 500 sectors, and Treasury yields.
+Market analysis tool — daily overview of major indexes, S&P 500 sectors,
+Treasury yields, and VIX, enriched with knowledge base insights.
 
 All data sourced from market_data.get_bars (tastytrade primary, yfinance fallback).
+Knowledge context sourced from the shared knowledge base.
 No web searches are performed.
 """
 from __future__ import annotations
 
 import asyncio
 
+from research.tools.knowledge import search_knowledge
 from research.tools.market_data import _CHART_STYLE, get_bars
 
 # ---------------------------------------------------------------------------
@@ -44,6 +47,12 @@ _TREASURY_DEFS = [
     {"symbol": "^FVX",     "label": "5-Year",  "maturity": "5Y"},
     {"symbol": "^TNX",     "label": "10-Year", "maturity": "10Y"},
     {"symbol": "^TYX",     "label": "30-Year", "maturity": "30Y"},
+]
+
+_KNOWLEDGE_QUERIES = [
+    ("sector",     "equity market sector rotation breadth risk sentiment",          ["macro", "sector", "strategy"]),
+    ("yields",     "treasury yield curve interest rates economic outlook",           ["macro", "market_risk"]),
+    ("volatility", "VIX volatility market fear greed risk-off",                     ["market_risk", "sentiment"]),
 ]
 
 
@@ -104,27 +113,35 @@ def _yield_curve_spreads(yields: list[dict]) -> dict:
 async def get_market_analysis() -> dict:
     """
     Fetch daily market analysis data for major indexes, all 11 S&P 500 sectors,
-    and the 5-point Treasury yield curve.
+    Treasury yields, VIX, and knowledge base insights — all in one parallel fetch.
 
-    All requests run in parallel. Returns three top-level sections:
-      index_charts      — 1-year daily OHLCV bars for SPX, DJIA, Nasdaq, Russell 2000
+    Returns five top-level sections:
+      index_charts       — 1-year daily OHLCV bars for SPX, DJX, NDX, RUT
       sector_performance — day-over-day % change for all 11 GICS sectors, sorted desc
-      treasury_yields   — yield levels and basis-point changes for 3M/2Y/5Y/10Y/30Y,
-                          plus curve_shape spread metrics
+      treasury_yields    — yield levels and bps changes for 3M/2Y/5Y/10Y/30Y
+                           plus curve_shape spread metrics
+      vix                — VIX level, previous level, and day % change (no chart)
+      knowledge          — relevant knowledge base insights for sectors, yields,
+                           and volatility to inform LLM opinion
     """
     n_idx = len(_INDEX_DEFS)
     n_sec = len(_SECTOR_DEFS)
+    n_tsy = len(_TREASURY_DEFS)
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="1y", interval="1d") for d in _INDEX_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _SECTOR_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _TREASURY_DEFS],
+        get_bars("VIX", period="5d", interval="1d"),
+        *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
         return_exceptions=True,
     )
 
     idx_results = results[:n_idx]
     sec_results = results[n_idx : n_idx + n_sec]
-    tsy_results = results[n_idx + n_sec :]
+    tsy_results = results[n_idx + n_sec : n_idx + n_sec + n_tsy]
+    vix_result  = results[n_idx + n_sec + n_tsy]
+    kn_results  = results[n_idx + n_sec + n_tsy + 1 :]
 
     # --- Index charts (2×2 grid) --------------------------------------------
     charts: list[dict] = []
@@ -198,6 +215,27 @@ async def get_market_analysis() -> dict:
             entry["data_source"] = result.get("data_source")
         yields.append(entry)
 
+    # --- VIX ----------------------------------------------------------------
+    if isinstance(vix_result, Exception):
+        vix = {"symbol": "VIX", "error": str(vix_result), "current_level": None,
+               "prev_level": None, "day_change_pct": None}
+    else:
+        bars = vix_result.get("bars", [])
+        curr = bars[-1]["close"] if bars else None
+        prev = bars[-2]["close"] if len(bars) >= 2 else None
+        vix = {
+            "symbol":        "VIX",
+            "current_level": curr,
+            "prev_level":    prev,
+            "day_change_pct": _day_change_pct(bars),
+            "data_source":   vix_result.get("data_source"),
+        }
+
+    # --- Knowledge ----------------------------------------------------------
+    knowledge: dict = {}
+    for (key, _, _), result in zip(_KNOWLEDGE_QUERIES, kn_results):
+        knowledge[key] = result if not isinstance(result, Exception) else {"error": str(result)}
+
     return {
         "analysis_type": "market_analysis",
         "index_charts": {
@@ -217,4 +255,6 @@ async def get_market_analysis() -> dict:
             "yields":     yields,
             "curve_shape": _yield_curve_spreads(yields),
         },
+        "vix": vix,
+        "knowledge": knowledge,
     }
