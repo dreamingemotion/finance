@@ -372,6 +372,9 @@ async def get_market_analysis() -> dict:
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
+    - Draw a thin horizontal dashed line at open_level spanning the full
+      chart width. Use rgba(255,255,255,0.4) for the line color. Label it
+      "Open" in small text at the right edge of the line.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,

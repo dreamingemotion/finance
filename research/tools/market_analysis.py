@@ -21,7 +21,7 @@ _INDEX_DEFS = [
     {"symbol": "SPX", "label": "S&P 500",     "grid_position": "top-left"},
     {"symbol": "DJX", "label": "Dow Jones",   "grid_position": "top-right"},
     {"symbol": "NDX", "label": "Nasdaq 100",  "grid_position": "bottom-left"},
-    {"symbol": "RUT", "label": "Russell 2000", "grid_position": "bottom-right"},
+    {"symbol": "IWM", "label": "Russell 2000", "grid_position": "bottom-right"},
 ]
 
 _SECTOR_DEFS = [
@@ -183,6 +183,7 @@ async def get_market_analysis() -> dict:
             entry["data_source"]    = result.get("data_source")
             entry["last_bar_stale"] = result.get("last_bar_stale")
             entry["day_change_pct"] = _day_change_pct(bars)
+            entry["open_level"]     = round(bars[0]["open"], 2) if bars else None
         charts.append(entry)
 
     # --- Sector performance --------------------------------------------------
