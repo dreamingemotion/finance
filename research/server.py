@@ -372,9 +372,17 @@ async def get_market_analysis() -> dict:
       Both fields are pre-computed — do not reformat or recolor them.
     - suppress_time_gaps is true: use a sequential index x-axis so pre-market
       gaps are hidden. Show time labels (HH:MM) from the bar timestamp.
-    - Use chart.price_min and chart.price_max as the y-axis bounds — do NOT
-      compute min/max from the bars array. These bounds already include the
-      prev_close value so the reference line is always within the chart.
+    - When computing the y-axis price range, include overlay prices so the
+      reference line is always within bounds even on gap days:
+        const allPrices = [
+          ...bars.flatMap(b => [b.low, b.high]),
+          ...chart.overlays.map(ov => ov.price)
+        ];
+        const rawMin = Math.min(...allPrices);
+        const rawMax = Math.max(...allPrices);
+        const pad    = (rawMax - rawMin) * 0.03;
+        const minPrice = rawMin - pad;
+        const maxPrice = rawMax + pad;
     - Each panel must have mouseover tooltips: time, O, H, L, C, % change.
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
