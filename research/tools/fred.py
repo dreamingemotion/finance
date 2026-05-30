@@ -39,6 +39,15 @@ def _api_key() -> str:
     return key
 
 
+def _sanitize(exc: Exception) -> str:
+    """Strip the FRED API key from exception messages before they reach tool output."""
+    msg = str(exc)
+    key = os.environ.get("FRED_API_KEY", "")
+    if key:
+        msg = msg.replace(key, "***")
+    return msg
+
+
 def _start_date(period: str) -> str:
     days = _PERIOD_DAYS.get(period, 35)
     return (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
@@ -49,29 +58,33 @@ async def _fetch_observations(
     series_id: str,
     observation_start: str,
 ) -> list[dict]:
-    """Fetch and clean observations for one FRED series (strips missing-value dots)."""
-    resp = await client.get(
-        f"{_BASE_URL}/series/observations",
-        params={
-            "series_id":         series_id,
-            "api_key":           _api_key(),
-            "file_type":         "json",
-            "observation_start": observation_start,
-            "sort_order":        "asc",
-        },
-        timeout=15.0,
-    )
-    resp.raise_for_status()
-    out = []
-    for obs in resp.json().get("observations", []):
-        v = obs.get("value", ".")
-        if v == "." or v is None:
+    """Fetch and clean observations for one FRED series (strips missing-value dots).
+    Retries up to 2 times on 429 with exponential back-off."""
+    params = {
+        "series_id":         series_id,
+        "api_key":           _api_key(),
+        "file_type":         "json",
+        "observation_start": observation_start,
+        "sort_order":        "asc",
+    }
+    for attempt in range(3):
+        resp = await client.get(f"{_BASE_URL}/series/observations", params=params, timeout=15.0)
+        if resp.status_code == 429 and attempt < 2:
+            await asyncio.sleep(2 ** attempt)   # 1 s, then 2 s
             continue
-        try:
-            out.append({"date": obs["date"], "value": round(float(v), 4)})
-        except (ValueError, TypeError):
-            pass
-    return out
+        resp.raise_for_status()
+        out = []
+        for obs in resp.json().get("observations", []):
+            v = obs.get("value", ".")
+            if v == "." or v is None:
+                continue
+            try:
+                out.append({"date": obs["date"], "value": round(float(v), 4)})
+            except (ValueError, TypeError):
+                pass
+        return out
+    resp.raise_for_status()  # exhausted retries
+    return []                # unreachable — raise_for_status throws
 
 
 async def get_fred_series(series_id: str, period: str = "1y") -> dict:
@@ -120,7 +133,7 @@ async def get_fred_series(series_id: str, period: str = "1y") -> dict:
             pass
 
     if isinstance(observations, Exception):
-        return {"series_id": series_id, "error": str(observations)}
+        return {"series_id": series_id, "error": _sanitize(observations)}
 
     return {
         "series_id":    series_id,
@@ -150,11 +163,14 @@ async def get_treasury_yields() -> dict:
                              prev_yield_pct, change_bps, as_of }
     """
     start = _start_date("1mo")  # 35 days — plenty to find two business days
+    # Sequential — FRED's burst limit rejects simultaneous requests
+    results: list = []
     async with httpx.AsyncClient() as client:
-        results = await asyncio.gather(
-            *[_fetch_observations(client, s["series_id"], start) for s in _TREASURY_SERIES],
-            return_exceptions=True,
-        )
+        for s in _TREASURY_SERIES:
+            try:
+                results.append(await _fetch_observations(client, s["series_id"], start))
+            except Exception as exc:
+                results.append(exc)
 
     yields: list[dict] = []
     as_of: str | None = None
@@ -166,7 +182,7 @@ async def get_treasury_yields() -> dict:
         }
         if isinstance(result, Exception):
             entry.update({
-                "error":          str(result),
+                "error":          _sanitize(result),
                 "yield_pct":      None,
                 "prev_yield_pct": None,
                 "change_bps":     None,
