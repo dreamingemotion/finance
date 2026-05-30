@@ -70,6 +70,27 @@ def _day_change_pct(bars: list[dict]) -> float | None:
     return round((curr - prev) / prev * 100, 2)
 
 
+def _split_today_bars(bars: list[dict]) -> tuple[list[dict], float | None]:
+    """Return (today_bars, prev_session_close) by splitting on the most-recent date."""
+    from datetime import datetime
+    if not bars:
+        return [], None
+    dates = []
+    for b in bars:
+        try:
+            dates.append(datetime.fromisoformat(b["time"]).date())
+        except Exception:
+            dates.append(None)
+    valid_dates = [d for d in dates if d is not None]
+    if not valid_dates:
+        return bars, None
+    latest = max(valid_dates)
+    today_bars = [b for b, d in zip(bars, dates) if d == latest]
+    prev_bars  = [b for b, d in zip(bars, dates) if d is not None and d < latest]
+    prev_close = prev_bars[-1]["close"] if prev_bars else None
+    return today_bars, prev_close
+
+
 def _slim_bars(bars: list[dict]) -> list[dict]:
     """Strip volume and round OHLCV values to reduce response payload size."""
     return [
@@ -143,7 +164,7 @@ async def get_market_analysis() -> dict:
     n_tsy = len(_TREASURY_DEFS)
 
     results = await asyncio.gather(
-        *[get_bars(d["symbol"], period="1d", interval="5m") for d in _INDEX_DEFS],
+        *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _SECTOR_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _TREASURY_DEFS],
         get_bars("VIX", period="5d", interval="1d"),
@@ -176,20 +197,21 @@ async def get_market_analysis() -> dict:
             entry["bars"]           = []
             entry["bar_count"]      = 0
         else:
-            bars = result.get("bars", [])
-            slimmed = _slim_bars(bars)
+            all_bars = result.get("bars", [])
+            today_bars, prev_close = _split_today_bars(all_bars)
+            slimmed = _slim_bars(today_bars)
             entry["bars"]           = slimmed
             entry["bar_count"]      = len(slimmed)
             entry["data_source"]    = result.get("data_source")
             entry["last_bar_stale"] = result.get("last_bar_stale")
-            # Day change from first bar's open to last bar's close (intraday)
-            first_open = bars[0]["open"] if bars else None
-            last_close = bars[-1]["close"] if bars else None
+            # Day change from first intraday bar's open to last bar's close
+            first_open = today_bars[0]["open"] if today_bars else None
+            last_close = today_bars[-1]["close"] if today_bars else None
             entry["day_change_pct"] = (
                 round((last_close - first_open) / first_open * 100, 2)
                 if first_open and last_close else None
             )
-            entry["open_level"]     = round(first_open, 2) if first_open else None
+            entry["prev_close"] = round(prev_close, 2) if prev_close else None
         charts.append(entry)
 
     # --- Sector performance --------------------------------------------------

@@ -375,27 +375,28 @@ async def get_market_analysis() -> dict:
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
-    - REQUIRED — opening price line. This MUST be drawn in every panel.
+    - REQUIRED — previous close line. This MUST be drawn in every panel.
       After all candles are drawn, compute the pixel y-coordinate of
-      open_level using the exact same minPrice/maxPrice/chartHeight
+      prev_close using the exact same minPrice/maxPrice/chartHeight
       variables already used to position the candles:
-        const openY = chartHeight - ((open_level - minPrice) / (maxPrice - minPrice)) * chartHeight;
+        const prevCloseY = chartHeight - ((prev_close - minPrice) / (maxPrice - minPrice)) * chartHeight;
       Then draw:
         ctx.save();
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = "rgba(255,255,255,0.5)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, openY);
-        ctx.lineTo(chartWidth, openY);
+        ctx.moveTo(0, prevCloseY);
+        ctx.lineTo(chartWidth, prevCloseY);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.fillStyle = "rgba(255,255,255,0.6)";
         ctx.font = "10px sans-serif";
-        ctx.fillText("Open", chartWidth - 36, openY - 3);
+        ctx.fillText("Prev Close", chartWidth - 62, prevCloseY - 3);
         ctx.restore();
       If your variable names differ, adapt accordingly — the requirement
-      is a dashed white line at the open price level with an "Open" label.
+      is a dashed white line at the previous session's close price with
+      a "Prev Close" label at the right edge.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
@@ -444,10 +445,10 @@ async def get_market_analysis() -> dict:
     - Render a table: Maturity | Yield (%) | Change (bps).
       Format yield_pct to 3 decimal places. Format change_bps with sign
       (+3.5 bps / −2.0 bps). Show "N/A" for null entries.
-    - Color each Change (bps) cell: up_color (#1d9e75) if positive,
-      down_color (#d85a30) if negative, neutral if zero or N/A.
-    - Color the Yield (%) cell with the same rule so the direction is
-      immediately visible across the whole row.
+    - Color each Change (bps) cell: green (#1d9e75) if the value is
+      positive (yields rose), red (#d85a30) if negative (yields fell),
+      neutral grey if zero or N/A. Apply the same color to the Yield (%)
+      cell in the same row so the direction is visible at a glance.
     - Below the table render a yield curve line chart using raw Canvas 2D API.
       x-axis = maturity order (3M → 2Y → 5Y → 10Y → 30Y), y-axis = yield_pct.
       Plot each available maturity as a point; connect with straight lines.
