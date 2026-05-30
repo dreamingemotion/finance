@@ -182,8 +182,14 @@ async def get_market_analysis() -> dict:
             entry["bar_count"]      = len(slimmed)
             entry["data_source"]    = result.get("data_source")
             entry["last_bar_stale"] = result.get("last_bar_stale")
-            entry["day_change_pct"] = _day_change_pct(bars)
-            entry["open_level"]     = round(bars[0]["open"], 2) if bars else None
+            # Day change from first bar's open to last bar's close (intraday)
+            first_open = bars[0]["open"] if bars else None
+            last_close = bars[-1]["close"] if bars else None
+            entry["day_change_pct"] = (
+                round((last_close - first_open) / first_open * 100, 2)
+                if first_open and last_close else None
+            )
+            entry["open_level"]     = round(first_open, 2) if first_open else None
         charts.append(entry)
 
     # --- Sector performance --------------------------------------------------

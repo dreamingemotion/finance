@@ -365,7 +365,10 @@ async def get_market_analysis() -> dict:
     - Draw candlesticks (wicks + bodies) using chart_style.up_color (#1d9e75)
       and chart_style.down_color (#d85a30). Never substitute other colors.
     - Sort by render_order; place each at its grid_position.
-    - Title each panel: "{label}  {day_change_pct:+.2f}%"  e.g. "S&P 500  +0.43%".
+    - Title each panel with the index label (e.g. "S&P 500") in the top-left.
+    - Display day_change_pct prominently in the top-right of each panel as
+      large bold text: "+0.43%" in up_color if positive, "−0.43%" in
+      down_color if negative. This MUST be visible — do not omit it.
     - suppress_time_gaps is true: use a sequential index x-axis so pre-market
       gaps are hidden. Show time labels (HH:MM) from the bar timestamp.
     - Each panel must have mouseover tooltips: time, O, H, L, C, % change.
@@ -404,8 +407,12 @@ async def get_market_analysis() -> dict:
 
     Rendering rules:
     - Render a table: Maturity | Yield (%) | Change (bps).
-      Format yield_pct to 2 decimal places. Format change_bps with sign
+      Format yield_pct to 3 decimal places. Format change_bps with sign
       (+3.5 bps / −2.0 bps). Show "N/A" for null entries.
+    - Color each Change (bps) cell: up_color (#1d9e75) if positive,
+      down_color (#d85a30) if negative, neutral if zero or N/A.
+    - Color the Yield (%) cell with the same rule so the direction is
+      immediately visible across the whole row.
     - Below the table render a yield curve line chart using raw Canvas 2D API.
       x-axis = maturity order (3M → 2Y → 5Y → 10Y → 30Y), y-axis = yield_pct.
       Plot each available maturity as a point; connect with straight lines.
