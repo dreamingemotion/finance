@@ -343,6 +343,7 @@ async def get_market_analysis() -> dict:
     """
     ALWAYS call this tool — and only this tool — when the user asks for a
     Market Analysis, daily market overview, or market summary.
+    Do NOT search the web, use WebSearch, or fetch any URLs for market data.
     Do NOT call get_bars, get_quote, or get_snapshot separately to assemble
     this — all data is returned in a single parallel fetch here.
 
