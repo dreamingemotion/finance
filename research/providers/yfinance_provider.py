@@ -11,6 +11,12 @@ from shared.data.brokers.yahoo import YahooClient
 
 from .base import MarketDataProvider
 
+# DXFeed/Tastytrade symbols that map to different tickers on Yahoo Finance.
+# Add entries here whenever a primary symbol would resolve to the wrong security.
+_YF_SYMBOL_MAP: dict[str, str] = {
+    "IXIC": "^IXIC",   # Nasdaq Composite (bare IXIC unknown to Yahoo Finance)
+}
+
 _PERIOD_DAYS: dict[str, int | None] = {
     "1d":  1,   "3d":  3,   "5d":  5,   "1mo": 30,  "2mo": 60,
     "3mo": 90,  "6mo": 180, "1y":  365, "2y":  730, "3y":  1095,
@@ -84,10 +90,11 @@ class YFinanceProvider(MarketDataProvider):
         return await asyncio.to_thread(_fetch)
 
     async def get_bars(self, symbol: str, period: str, interval: str) -> list[dict]:
+        yf_symbol = _YF_SYMBOL_MAP.get(symbol.upper(), symbol)
         yc_period = _YF_TO_YC.get(interval, interval)
         from_dt   = _from_date(period)
         candles   = await self._client.get_candles(
-            symbols=[symbol],
+            symbols=[yf_symbol],
             period=yc_period,
             from_date=from_dt,
         )
