@@ -1,7 +1,7 @@
 # finance-research MCP
 
-Research MCP server providing stock analysis, SEC filing research, market
-data, valuation history, and knowledge base queries.
+Research MCP server providing daily market analysis, stock analysis, SEC
+filing research, market data, valuation history, and knowledge base queries.
 
 ## Architecture
 
@@ -14,6 +14,7 @@ research/
 ├── tree_store.py          # JSON-on-disk store for indexed filing trees
 ├── tree_search.py         # Keyword + LLM reasoning search over filing trees
 └── tools/
+    ├── market_analysis.py # get_market_analysis() — daily index/sector/VIX/yield overview
     ├── analysis.py        # analyze() — full and partial stock analysis aggregator
     ├── valuation.py       # get_valuation_ratios() — 10-year P/E and P/B via EDGAR XBRL
     ├── market_data.py     # get_quote, get_snapshot, get_bars, get_full_timeframe
@@ -22,6 +23,12 @@ research/
 ```
 
 ## Tools
+
+### Market analysis
+
+| Tool | Description |
+|---|---|
+| `get_market_analysis()` | **Daily market overview.** Intraday candlestick charts (5-min) for SPX, DJX, NDX, and IWM in a 2×2 grid; day % change for all 11 S&P 500 sectors as a bar chart; VIX level and day change; Treasury yield table (3M/2Y/5Y/10Y/30Y) with bps changes and yield curve chart. Includes knowledge base insights for each opinion section. All data fetched in parallel — no web search. |
 
 ### Analysis
 
@@ -207,6 +214,16 @@ Claude will prompt you to authenticate via OAuth on first connection.
 ## Usage
 
 ```
+# Daily market analysis
+get_market_analysis()
+→ {
+    index_charts:        2×2 intraday candlestick grid (SPX, DJX, NDX, IWM) with open line and day %,
+    sector_performance:  11 GICS sectors sorted by day % change (horizontal bar chart),
+    vix:                 { current_level, prev_level, day_change_pct },
+    treasury_yields:     { yields: [{ maturity, yield_pct, change_bps }], curve_shape },
+    knowledge:           { sector, yields, volatility } — knowledge base insights
+  }
+
 # Full stock analysis (default)
 analyze("PLTR")
 → { snapshot, price_structure, valuation, filing, knowledge }
