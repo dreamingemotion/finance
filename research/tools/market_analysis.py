@@ -20,7 +20,7 @@ from research.tools.market_data import _CHART_STYLE, get_bars
 
 _INDEX_DEFS = [
     {"symbol": "SPX", "label": "S&P 500",     "grid_position": "top-left"},
-    {"symbol": "DJX", "label": "Dow Jones",   "grid_position": "top-right"},
+    {"symbol": "DJX", "label": "Dow Jones",   "grid_position": "top-right", "price_multiplier": 100},
     {"symbol": "COMP", "label": "Nasdaq Composite", "grid_position": "bottom-left"},
     {"symbol": "IWM", "label": "Russell 2000", "grid_position": "bottom-right"},
 ]
@@ -189,6 +189,17 @@ async def get_market_analysis() -> dict:
         else:
             all_bars = result.get("bars", [])
             today_bars, prev_close = _split_today_bars(all_bars)
+            multiplier = defn.get("price_multiplier", 1)
+            if multiplier != 1:
+                today_bars = [
+                    {**b,
+                     "open":  b["open"]  * multiplier,
+                     "high":  b["high"]  * multiplier,
+                     "low":   b["low"]   * multiplier,
+                     "close": b["close"] * multiplier}
+                    for b in today_bars
+                ]
+                prev_close = prev_close * multiplier if prev_close is not None else None
             slimmed = _slim_bars(today_bars)
             entry["bars"]           = slimmed
             entry["bar_count"]      = len(slimmed)

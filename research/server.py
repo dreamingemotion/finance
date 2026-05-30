@@ -377,10 +377,15 @@ async def get_market_analysis() -> dict:
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
     - REQUIRED — previous close line. This MUST be drawn in every panel.
-      After all candles are drawn, compute the pixel y-coordinate of
-      prev_close using the exact same minPrice/maxPrice/chartHeight
-      variables already used to position the candles:
-        const prevCloseY = chartHeight - ((prev_close - minPrice) / (maxPrice - minPrice)) * chartHeight;
+      Each chart entry has a numeric field called prev_close — this is the
+      previous session's closing price pre-computed on the server. It is a
+      standalone number on the chart object, NOT derived from bars[0].open
+      or any value in the bars array. Do NOT use bars[0].open, bars[0].close,
+      or any bars value for this line. Read chart.prev_close directly.
+      After all candles are drawn, compute its pixel y-coordinate using the
+      same minPrice/maxPrice/chartHeight variables used to place the candles:
+        const refPrice = chart.prev_close;  // read from chart data, not bars
+        const prevCloseY = chartHeight - ((refPrice - minPrice) / (maxPrice - minPrice)) * chartHeight;
       Then draw:
         ctx.save();
         ctx.setLineDash([4, 4]);
@@ -395,11 +400,7 @@ async def get_market_analysis() -> dict:
         ctx.font = "10px sans-serif";
         ctx.fillText("Prev Close", chartWidth - 62, prevCloseY - 3);
         ctx.restore();
-      If your variable names differ, adapt accordingly — the requirement
-      is a dashed white line at the previous session's close price with
-      a "Prev Close" label at the right edge.
-      The label text MUST be "Prev Close". Do NOT use "Open", "Prior",
-      "Close", or any other text — only "Prev Close".
+      The label MUST read "Prev Close". Do NOT use "Open" or any other text.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
