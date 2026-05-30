@@ -15,6 +15,7 @@ research/
 ├── tree_search.py         # Keyword + LLM reasoning search over filing trees
 └── tools/
     ├── market_analysis.py # get_market_analysis() — daily index/sector/VIX/yield overview
+    ├── fred.py            # get_fred_series() — FRED economic time series; get_treasury_yields()
     ├── analysis.py        # analyze() — full and partial stock analysis aggregator
     ├── valuation.py       # get_valuation_ratios() — 10-year P/E and P/B via EDGAR XBRL
     ├── market_data.py     # get_quote, get_snapshot, get_bars, get_full_timeframe
@@ -28,7 +29,8 @@ research/
 
 | Tool | Description |
 |---|---|
-| `get_market_analysis()` | **Daily market overview.** Intraday candlestick charts (5-min) for SPX, DJX, NDX, and IWM in a 2×2 grid; day % change for all 11 S&P 500 sectors as a bar chart; VIX level and day change; Treasury yield table (3M/2Y/5Y/10Y/30Y) with bps changes and yield curve chart. Includes knowledge base insights for each opinion section. All data fetched in parallel — no web search. |
+| `get_market_analysis()` | **Daily market overview.** Intraday candlestick charts (5-min) for SPX, DJX, NDX, and IWM in a 2×2 grid; day % change for all 11 S&P 500 sectors as a bar chart; VIX level and day change; Treasury yield table (3M/2Y/5Y/10Y/30Y) from FRED with bps changes and yield curve chart. Includes knowledge base insights for each opinion section. All data fetched in parallel — no web search. |
+| `get_fred_series(series_id, period)` | **FRED economic data.** Fetches any St. Louis Fed time series by ID (e.g. `DGS10`, `FEDFUNDS`, `CPIAUCSL`, `UNRATE`, `GDP`). Returns observations oldest-first with series metadata. Use for macro indicators not available from market data providers. |
 
 ### Analysis
 
@@ -108,6 +110,7 @@ pip install -r requirements.txt
 | `TT_CLIENT_ID` | No | Tastytrade OAuth client ID (market data primary source) |
 | `TT_CLIENT_SECRET` | No | Tastytrade OAuth client secret |
 | `TT_REFRESH_TOKEN` | No | Tastytrade OAuth refresh token |
+| `FRED_API_KEY` | No (treasury yields + FRED tool) | St. Louis Fed API key — free at https://fred.stlouisfed.org/docs/api/api_key.html |
 
 PageIndex uses LiteLLM internally. Route it through OpenRouter by also setting:
 
@@ -217,10 +220,11 @@ Claude will prompt you to authenticate via OAuth on first connection.
 # Daily market analysis
 get_market_analysis()
 → {
-    index_charts:        2×2 intraday candlestick grid (SPX, DJX, NDX, IWM) with open line and day %,
+    index_charts:        2×2 intraday candlestick grid (SPX, DJX, NDX, IWM) with prev-close line and day %,
     sector_performance:  11 GICS sectors sorted by day % change (horizontal bar chart),
     vix:                 { current_level, prev_level, day_change_pct },
-    treasury_yields:     { yields: [{ maturity, yield_pct, change_bps }], curve_shape },
+    treasury_yields:     { yields: [{ maturity, yield_pct, change_bps }], curve_shape, as_of },
+                           maturities: 3M / 2Y / 5Y / 10Y / 30Y  (source: FRED)
     knowledge:           { sector, yields, volatility } — knowledge base insights
   }
 

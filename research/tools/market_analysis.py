@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
+from research.tools.fred import get_treasury_yields
 from research.tools.knowledge import search_knowledge
 from research.tools.market_data import _CHART_STYLE, get_bars
 
@@ -38,16 +39,6 @@ _SECTOR_DEFS = [
     {"symbol": "XLC",  "label": "Communication Services"},
 ]
 
-# ^IRX=3M  ^TWOYEAR=2Y  ^FVX=5Y  ^TNX=10Y  ^TYX=30Y
-# Yield values are returned in percentage points (e.g. 4.35 = 4.35%).
-# ^TWOYEAR may not be available in all yfinance versions; errors are handled gracefully.
-_TREASURY_DEFS = [
-    {"symbol": "^IRX",     "label": "3-Month", "maturity": "3M"},
-    {"symbol": "^TWOYEAR", "label": "2-Year",  "maturity": "2Y"},
-    {"symbol": "^FVX",     "label": "5-Year",  "maturity": "5Y"},
-    {"symbol": "^TNX",     "label": "10-Year", "maturity": "10Y"},
-    {"symbol": "^TYX",     "label": "30-Year", "maturity": "30Y"},
-]
 
 _KNOWLEDGE_QUERIES = [
     ("sector",     "equity market sector rotation breadth risk sentiment",          ["macro", "sector", "strategy"]),
@@ -161,12 +152,11 @@ async def get_market_analysis() -> dict:
     """
     n_idx = len(_INDEX_DEFS)
     n_sec = len(_SECTOR_DEFS)
-    n_tsy = len(_TREASURY_DEFS)
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _SECTOR_DEFS],
-        *[get_bars(d["symbol"], period="5d", interval="1d") for d in _TREASURY_DEFS],
+        get_treasury_yields(),
         get_bars("VIX", period="5d", interval="1d"),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
         return_exceptions=True,
@@ -174,9 +164,9 @@ async def get_market_analysis() -> dict:
 
     idx_results = results[:n_idx]
     sec_results = results[n_idx : n_idx + n_sec]
-    tsy_results = results[n_idx + n_sec : n_idx + n_sec + n_tsy]
-    vix_result  = results[n_idx + n_sec + n_tsy]
-    kn_results  = results[n_idx + n_sec + n_tsy + 1 :]
+    tsy_result  = results[n_idx + n_sec]
+    vix_result  = results[n_idx + n_sec + 1]
+    kn_results  = results[n_idx + n_sec + 2 :]
 
     # --- Index charts (2×2 grid) --------------------------------------------
     charts: list[dict] = []
@@ -232,32 +222,13 @@ async def get_market_analysis() -> dict:
 
     sectors.sort(key=lambda x: x.get("day_change_pct") or 0.0, reverse=True)
 
-    # --- Treasury yields ----------------------------------------------------
-    yields: list[dict] = []
-    for defn, result in zip(_TREASURY_DEFS, tsy_results):
-        entry = {
-            "maturity": defn["maturity"],
-            "label":    defn["label"],
-            "symbol":   defn["symbol"],
-        }
-        if isinstance(result, Exception):
-            entry["error"]          = str(result)
-            entry["yield_pct"]      = None
-            entry["prev_yield_pct"] = None
-            entry["change_bps"]     = None
-        else:
-            bars = result.get("bars", [])
-            curr_yield = bars[-1]["close"] if bars else None
-            prev_yield = bars[-2]["close"] if len(bars) >= 2 else None
-            entry["yield_pct"]      = curr_yield
-            entry["prev_yield_pct"] = prev_yield
-            entry["change_bps"] = (
-                round((curr_yield - prev_yield) * 100, 1)
-                if curr_yield is not None and prev_yield is not None
-                else None
-            )
-            entry["data_source"] = result.get("data_source")
-        yields.append(entry)
+    # --- Treasury yields (FRED) ---------------------------------------------
+    if isinstance(tsy_result, Exception):
+        tsy_yields: list[dict] = []
+        tsy_as_of: str | None = None
+    else:
+        tsy_yields = tsy_result.get("yields", [])
+        tsy_as_of  = tsy_result.get("as_of")
 
     # --- VIX ----------------------------------------------------------------
     if isinstance(vix_result, Exception):
@@ -295,10 +266,12 @@ async def get_market_analysis() -> dict:
         },
         "vix": vix,
         "treasury_yields": {
-            "render_as":  "table_and_yield_curve",
-            "maturities": ["3M", "2Y", "5Y", "10Y", "30Y"],
-            "yields":     yields,
-            "curve_shape": _yield_curve_spreads(yields),
+            "render_as":   "table_and_yield_curve",
+            "data_source": "fred",
+            "as_of":       tsy_as_of,
+            "maturities":  ["3M", "2Y", "5Y", "10Y", "30Y"],
+            "yields":      tsy_yields,
+            "curve_shape": _yield_curve_spreads(tsy_yields),
         },
         "knowledge": knowledge,
     }

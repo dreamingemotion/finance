@@ -69,6 +69,7 @@ from research.tools.knowledge import (
 from research.tools.analysis import analyze as _analyze
 from research.tools.valuation import get_valuation_ratios as _get_valuation_ratios
 from research.tools.market_analysis import get_market_analysis as _get_market_analysis
+from research.tools.fred import get_fred_series as _get_fred_series
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
@@ -436,7 +437,10 @@ async def get_market_analysis() -> dict:
 
     ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
-    Each entry has yield_pct (percent), change_bps (basis points vs prior close),
+    Data comes from FRED (US Treasury constant-maturity rates, authoritative,
+    typically published with a 1-business-day lag). treasury_yields.as_of shows
+    the date of the most recent FRED observation.
+    Each entry has yield_pct (percent), change_bps (basis points vs prior day),
     and prev_yield_pct. Entries with no data have yield_pct=null.
     treasury_yields.curve_shape contains spread_2y_10y, spread_3m_10y,
     spread_10y_30y, and shape_notes for curve characterisation.
@@ -476,6 +480,49 @@ async def get_market_analysis() -> dict:
     single coherent picture of the day's market character.
     """
     return await _get_market_analysis()
+
+
+@mcp.tool()
+async def get_fred_series(series_id: str, period: str = "1y") -> dict:
+    """
+    Fetch a FRED (Federal Reserve Economic Data) economic time series.
+
+    Use this for any macroeconomic indicator question — interest rates, inflation,
+    employment, GDP, yield spreads, money supply, or anything from the St. Louis Fed.
+    Do NOT use get_bars for this — FRED data is not available through tastytrade or yfinance.
+
+    series_id: FRED series identifier. Common examples:
+      Treasury rates : DGS1MO DGS3MO DGS6MO DGS1 DGS2 DGS5 DGS10 DGS20 DGS30
+      Fed policy     : DFF (daily fed funds effective rate)
+                       FEDFUNDS (monthly effective rate)
+      Inflation      : CPIAUCSL (headline CPI, monthly)
+                       CPILFESL (core CPI ex food/energy)
+                       PCEPI (PCE price index)
+                       PCEPILFE (core PCE — Fed's preferred measure)
+      Employment     : UNRATE (unemployment rate)
+                       PAYEMS (total nonfarm payrolls, monthly chg)
+                       ICSA (initial jobless claims, weekly)
+      Growth         : GDP (nominal, quarterly)
+                       GDPC1 (real GDP, quarterly)
+                       INDPRO (industrial production index)
+      Spreads        : T10Y2Y (10Y-2Y Treasury spread)
+                       T10Y3M (10Y-3M Treasury spread)
+      Money supply   : M2SL (M2 money supply)
+
+    period: look-back window — 1d 3d 5d 1mo 3mo 6mo 1y 2y 5y 10y.
+      Note: FRED series have varying native frequencies (daily, weekly, monthly,
+      quarterly). The observations returned reflect actual publication dates.
+      Short periods (1d, 3d) are padded to ensure at least one observation is returned.
+
+    Returns observations as [{date, value}, ...] oldest-first, with series
+    metadata (title, units, frequency). Missing values (weekends/holidays)
+    are already stripped — only real published data points are included.
+
+    Render observations as a line chart when the user asks to visualise the series.
+    Annotate the most recent value prominently. For rate/yield series express the
+    value in percent (e.g. "4.35%"); for index series show the raw level.
+    """
+    return await _get_fred_series(series_id, period)
 
 
 @mcp.tool()
