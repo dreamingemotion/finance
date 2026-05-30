@@ -398,6 +398,8 @@ async def get_market_analysis() -> dict:
       If your variable names differ, adapt accordingly — the requirement
       is a dashed white line at the previous session's close price with
       a "Prev Close" label at the right edge.
+      The label text MUST be "Prev Close". Do NOT use "Open", "Prior",
+      "Close", or any other text — only "Prev Close".
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
