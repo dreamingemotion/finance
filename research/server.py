@@ -383,9 +383,7 @@ async def get_market_analysis() -> dict:
       Each chart entry has an overlays array. Iterate it exactly as shown:
         for (const ov of chart.overlays) {
           if (ov.type === "hline") {
-            // ov.y_fraction is pre-computed by the server (0.0=top, 1.0=bottom).
-            // Multiply by chartHeight — no price or scale calculation needed.
-            const lineY = ov.y_fraction * chartHeight;
+            const lineY = chartHeight - ((ov.price - minPrice) / (maxPrice - minPrice)) * chartHeight;
             ctx.save();
             ctx.setLineDash(ov.dash || [4, 4]);
             ctx.strokeStyle = ov.color;
@@ -395,15 +393,10 @@ async def get_market_analysis() -> dict:
             ctx.lineTo(chartWidth, lineY);
             ctx.stroke();
             ctx.setLineDash([]);
-            ctx.fillStyle = "rgba(255,255,255,0.6)";
-            ctx.font = "10px sans-serif";
-            ctx.fillText(ov.label, chartWidth - 62, lineY - 3);
             ctx.restore();
           }
         }
-      ov.y_fraction is the ONLY input to lineY. Do NOT use ov.price, bars[0].open,
-      or any price value. Do NOT recompute the position from prices.
-      Use ov.label verbatim — do NOT substitute "Open" or any other string.
+      Draw the line only — no text label.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,

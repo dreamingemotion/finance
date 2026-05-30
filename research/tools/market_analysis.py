@@ -242,18 +242,10 @@ async def get_market_analysis() -> dict:
                 pad = (max(highs) - min(lows)) * 0.03 or min(lows) * 0.01
                 entry["price_min"] = round(min(lows)  - pad, 2)
                 entry["price_max"] = round(max(highs) + pad, 2)
-            # Pre-compute y_fraction so Claude needs no price math for the line.
-            # y_fraction=0.0 → top of chart, 1.0 → bottom (canvas y increases downward).
-            if pc is not None and entry.get("price_max") and entry.get("price_min"):
-                p_range = entry["price_max"] - entry["price_min"]
-                raw_frac = (entry["price_max"] - pc) / p_range if p_range > 0 else 0.5
-                y_frac = round(max(0.02, min(0.98, raw_frac)), 4)
-            else:
-                y_frac = None
             entry["overlays"] = (
-                [{"type": "hline", "y_fraction": y_frac, "price": pc,
-                  "color": "rgba(255,255,255,0.5)", "dash": [4, 4], "label": "Prev Close"}]
-                if pc is not None and y_frac is not None else []
+                [{"type": "hline", "price": pc,
+                  "color": "rgba(255,255,255,0.5)", "dash": [4, 4]}]
+                if pc is not None else []
             )
         charts.append(entry)
 
