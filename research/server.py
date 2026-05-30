@@ -375,20 +375,27 @@ async def get_market_analysis() -> dict:
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
-    - REQUIRED — opening price line: after drawing all candles, draw a
-      horizontal dashed line at open_level across the full chart width.
-      Use exactly this canvas pattern:
+    - REQUIRED — opening price line. This MUST be drawn in every panel.
+      After all candles are drawn, compute the pixel y-coordinate of
+      open_level using the exact same minPrice/maxPrice/chartHeight
+      variables already used to position the candles:
+        const openY = chartHeight - ((open_level - minPrice) / (maxPrice - minPrice)) * chartHeight;
+      Then draw:
         ctx.save();
         ctx.setLineDash([4, 4]);
         ctx.strokeStyle = "rgba(255,255,255,0.5)";
         ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.moveTo(0, yScale(open_level));
-        ctx.lineTo(chartWidth, yScale(open_level));
+        ctx.moveTo(0, openY);
+        ctx.lineTo(chartWidth, openY);
         ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = "rgba(255,255,255,0.6)";
+        ctx.font = "10px sans-serif";
+        ctx.fillText("Open", chartWidth - 36, openY - 3);
         ctx.restore();
-      Then label it: draw the text "Open" in rgba(255,255,255,0.6) at the
-      right edge of the line, vertically centred on it. Do NOT skip this.
+      If your variable names differ, adapt accordingly — the requirement
+      is a dashed white line at the open price level with an "Open" label.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
@@ -407,7 +414,11 @@ async def get_market_analysis() -> dict:
     - Which sectors led and lagged and what the spread implies.
     - Whether the rotation pattern suggests risk-on or risk-off positioning.
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
-    - Incorporate any relevant insights from knowledge.sector.results.
+    - Incorporate insights from knowledge.sector.results into the analysis.
+      Write "**Knowledge Base**" in bold before each such insight, and
+      cite the source title in parentheses, e.g.:
+      "**Knowledge Base** (Sector Rotation Framework): defensive leadership
+      on a flat tape often precedes a risk-off leg."
 
     ── SECTION 3: VIX (vix) ─────────────────────────────────────────────────
     vix contains current_level, prev_level, and day_change_pct. No chart.
@@ -418,7 +429,9 @@ async def get_market_analysis() -> dict:
     - Characterise the implied volatility regime: <15 complacent, 15–20 normal,
       20–30 elevated, >30 fear/crisis.
     - Note whether VIX direction confirms or contradicts the equity price action.
-    - Incorporate any relevant insights from knowledge.volatility.results.
+    - Incorporate insights from knowledge.volatility.results into the analysis.
+      Write "**Knowledge Base**" in bold before each such insight and cite
+      the source title in parentheses.
 
     ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
@@ -446,7 +459,9 @@ async def get_market_analysis() -> dict:
     - Current curve shape (normal, flat, inverted, or humped) using curve_shape.
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
-    - Incorporate any relevant insights from knowledge.yields.results.
+    - Incorporate insights from knowledge.yields.results into the analysis.
+      Write "**Knowledge Base**" in bold before each such insight and cite
+      the source title in parentheses.
 
     ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
     knowledge contains three keys — sector, yields, volatility — each with
