@@ -375,9 +375,20 @@ async def get_market_analysis() -> dict:
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
-    - Draw a thin horizontal dashed line at open_level spanning the full
-      chart width. Use rgba(255,255,255,0.4) for the line color. Label it
-      "Open" in small text at the right edge of the line.
+    - REQUIRED — opening price line: after drawing all candles, draw a
+      horizontal dashed line at open_level across the full chart width.
+      Use exactly this canvas pattern:
+        ctx.save();
+        ctx.setLineDash([4, 4]);
+        ctx.strokeStyle = "rgba(255,255,255,0.5)";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(0, yScale(open_level));
+        ctx.lineTo(chartWidth, yScale(open_level));
+        ctx.stroke();
+        ctx.restore();
+      Then label it: draw the text "Open" in rgba(255,255,255,0.6) at the
+      right edge of the line, vertically centred on it. Do NOT skip this.
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
