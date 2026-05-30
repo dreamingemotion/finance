@@ -68,6 +68,7 @@ from research.tools.knowledge import (
 )
 from research.tools.analysis import analyze as _analyze
 from research.tools.valuation import get_valuation_ratios as _get_valuation_ratios
+from research.tools.market_analysis import get_market_analysis as _get_market_analysis
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
@@ -335,6 +336,82 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       9. Knowledge Context — any relevant insights from the knowledge base.
     """
     return await _analyze(symbol, full=full)
+
+
+@mcp.tool()
+async def get_market_analysis() -> dict:
+    """
+    ALWAYS call this tool — and only this tool — when the user asks for a
+    Market Analysis, daily market overview, or market summary.
+    Do NOT call get_bars, get_quote, or get_snapshot separately to assemble
+    this — all data is returned in a single parallel fetch here.
+
+    Returns three sections. Follow all rendering rules exactly.
+
+    ── SECTION 1: INDEX CHARTS (index_charts) ──────────────────────────────
+    index_charts.charts contains four entries with render_order (0–3) and
+    grid_position ("top-left", "top-right", "bottom-left", "bottom-right"):
+      top-left:     SPX  — S&P 500
+      top-right:    DJX  — Dow Jones
+      bottom-left:  NDX  — Nasdaq 100
+      bottom-right: RUT  — Russell 2000
+    Each entry has 1-year daily bars (period=1y, interval=1d).
+
+    Rendering rules:
+    - Render the 2×2 grid FIRST, before any text analysis.
+    - Use raw HTML Canvas 2D API only. No Chart.js, Plotly, D3, or any library.
+    - Draw candlesticks (wicks + bodies) using chart_style.up_color (#1d9e75)
+      and chart_style.down_color (#d85a30). Never substitute other colors.
+    - Sort by render_order; place each at its grid_position.
+    - Title each panel: "{label}  {day_change_pct:+.2f}%"  e.g. "S&P 500  +0.43%".
+    - Use a date-based x-axis (suppress_time_gaps is false for daily bars).
+    - Each panel must have mouseover tooltips: date, O, H, L, C, % change.
+      Position tooltips within the panel bounds.
+    - Before rendering, deduplicate bars: drop any bar where open === 0,
+      then deduplicate by composite key (time + open + close).
+
+    ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
+    sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
+    already sorted largest-to-smallest by day_change_pct.
+
+    Rendering rules:
+    - Render as a horizontal bar chart immediately after the index grid.
+    - Each bar = one sector, labeled with the sector label on the left.
+    - Bars right of center (positive) use up_color (#1d9e75);
+      bars left of center (negative) use down_color (#d85a30).
+    - Annotate each bar with the value, e.g. "+1.23%" or "−0.45%".
+    - Sectors with a null day_change_pct (data unavailable) show a grey bar.
+    - Use raw Canvas 2D API only. No chart libraries.
+
+    After the bar chart write a 3–5 sentence analysis covering:
+    - Which sectors led and lagged and what the spread implies.
+    - Whether the rotation pattern suggests risk-on or risk-off positioning.
+    - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
+
+    ── SECTION 3: TREASURY YIELDS (treasury_yields) ────────────────────────
+    treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
+    Each entry has yield_pct (percent), change_bps (basis points vs prior close),
+    and prev_yield_pct. Entries with no data have yield_pct=null.
+    treasury_yields.curve_shape contains spread_2y_10y, spread_3m_10y,
+    spread_10y_30y, and shape_notes for curve characterisation.
+
+    Rendering rules:
+    - Render a table: Maturity | Yield (%) | Change (bps).
+      Format yield_pct to 2 decimal places. Format change_bps with sign
+      (+3.5 bps / −2.0 bps). Show "N/A" for null entries.
+    - Below the table render a yield curve line chart using raw Canvas 2D API.
+      x-axis = maturity order (3M → 2Y → 5Y → 10Y → 30Y), y-axis = yield_pct.
+      Plot each available maturity as a point; connect with straight lines.
+      Color the line green when the long end is higher (normal curve),
+      red when the short end is higher (inverted). Skip null maturities.
+
+    After the curve write a 4–6 sentence analysis covering:
+    - Whether yields rose or fell today and what that implies for risk assets.
+    - Current curve shape (normal, flat, inverted, or humped) using curve_shape.
+    - Whether the curve is steepening or flattening based on today's bps changes.
+    - What the shape implies for the economic and credit outlook.
+    """
+    return await _get_market_analysis()
 
 
 @mcp.tool()
