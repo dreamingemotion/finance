@@ -367,11 +367,14 @@ async def get_market_analysis() -> dict:
       and chart_style.down_color (#d85a30). Never substitute other colors.
     - Sort by render_order; place each at its grid_position.
     - Title each panel with the index label (e.g. "S&P 500") in the top-left.
-    - Display day_change_pct prominently in the top-right of each panel as
-      large bold text: "+0.43%" in up_color if positive, "−0.43%" in
-      down_color if negative. This MUST be visible — do not omit it.
+    - Display chart.formatted_pct prominently in the top-right of each panel
+      as large bold text. Use chart.pct_color for the text color.
+      Both fields are pre-computed — do not reformat or recolor them.
     - suppress_time_gaps is true: use a sequential index x-axis so pre-market
       gaps are hidden. Show time labels (HH:MM) from the bar timestamp.
+    - Use chart.price_min and chart.price_max as the y-axis bounds — do NOT
+      compute min/max from the bars array. These bounds already include the
+      prev_close value so the reference line is always within the chart.
     - Each panel must have mouseover tooltips: time, O, H, L, C, % change.
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
@@ -408,9 +411,8 @@ async def get_market_analysis() -> dict:
     Rendering rules:
     - Render as a horizontal bar chart immediately after the index grid.
     - Each bar = one sector, labeled with the sector label on the left.
-    - Bars right of center (positive) use up_color (#1d9e75);
-      bars left of center (negative) use down_color (#d85a30).
-    - Annotate each bar with the value, e.g. "+1.23%" or "−0.45%".
+    - Use sector.bar_color for each bar's fill color (pre-computed).
+    - Annotate each bar with sector.formatted_pct (pre-formatted string).
     - Sectors with a null day_change_pct (data unavailable) show a grey bar.
     - Use raw Canvas 2D API only. No chart libraries.
 
@@ -429,9 +431,9 @@ async def get_market_analysis() -> dict:
 
     Render the VIX level and day % change before the treasury section.
     Write a short VIX commentary (2–3 sentences):
-    - State the current VIX level and day % change (e.g. "VIX rose 4.2% to 18.3").
-    - Characterise the implied volatility regime: <15 complacent, 15–20 normal,
-      20–30 elevated, >30 fear/crisis.
+    - State the current VIX level and vix.formatted_pct day change.
+    - Name the regime from vix.regime (pre-computed: complacent / normal /
+      elevated / fear/crisis) — do not recompute it from the level.
     - Note whether VIX direction confirms or contradicts the equity price action.
     - Incorporate insights from knowledge.volatility.results into the analysis.
       Write "**Knowledge Base**" in bold before each such insight and cite
@@ -449,17 +451,15 @@ async def get_market_analysis() -> dict:
 
     Rendering rules:
     - Render a table: Maturity | Yield (%) | Change (bps).
-      Format yield_pct to 3 decimal places. Format change_bps with sign
-      (+3.5 bps / −2.0 bps). Show "N/A" for null entries.
-    - Color each Change (bps) cell: green (#1d9e75) if the value is
-      positive (yields rose), red (#d85a30) if negative (yields fell),
-      neutral grey if zero or N/A. Apply the same color to the Yield (%)
-      cell in the same row so the direction is visible at a glance.
+      Display yield.formatted_yield and yield.formatted_change — pre-formatted
+      strings (e.g. "4.352%" and "+2.0 bps"). Show "N/A" as-is.
+    - Color each Yield and Change cell using yield.change_color — a pre-computed
+      hex string. Do not recompute colors from the numeric values.
     - Below the table render a yield curve line chart using raw Canvas 2D API.
       x-axis = maturity order (3M → 2Y → 5Y → 10Y → 30Y), y-axis = yield_pct.
       Plot each available maturity as a point; connect with straight lines.
-      Color the line green when the long end is higher (normal curve),
-      red when the short end is higher (inverted). Skip null maturities.
+      Use curve_shape.curve_color for the line color (pre-computed hex).
+      Skip null maturities.
 
     After the curve write a 4–6 sentence analysis covering:
     - Whether yields rose or fell today and what that implies for risk assets.

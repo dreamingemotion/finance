@@ -51,6 +51,20 @@ _KNOWLEDGE_QUERIES = [
 # Helpers
 # ---------------------------------------------------------------------------
 
+_UP   = _CHART_STYLE["up_color"]    # #1d9e75
+_DOWN = _CHART_STYLE["down_color"]  # #d85a30
+
+
+def _pct_color(pct: float | None) -> str:
+    return _UP if (pct or 0) >= 0 else _DOWN
+
+
+def _fmt_pct(pct: float | None) -> str:
+    if pct is None:
+        return "N/A"
+    return f"+{pct:.2f}%" if pct >= 0 else f"{pct:.2f}%"
+
+
 def _day_change_pct(bars: list[dict]) -> float | None:
     if len(bars) < 2:
         return None
@@ -124,11 +138,14 @@ def _yield_curve_spreads(yields: list[dict]) -> dict:
         elif s_3m_10 < 0.25:
             shape_notes.append("3M-10Y nearly flat")
 
+    curve_color = _UP if (s_3m_10 is not None and s_3m_10 >= 0) else _DOWN
+
     return {
         "spread_2y_10y":  s_2_10,
         "spread_3m_10y":  s_3m_10,
         "spread_10y_30y": s_10_30,
         "shape_notes":    shape_notes,
+        "curve_color":    curve_color,
     }
 
 
@@ -212,7 +229,19 @@ async def get_market_analysis() -> dict:
                 if prev_close and last_close else None
             )
             pc = round(prev_close, 2) if prev_close else None
-            entry["prev_close"] = pc
+            entry["prev_close"]    = pc
+            entry["pct_color"]     = _pct_color(entry["day_change_pct"])
+            entry["formatted_pct"] = _fmt_pct(entry["day_change_pct"])
+            # Expand price range to include prev_close so the line is always on-screen
+            if slimmed:
+                lows  = [b["low"]  for b in slimmed]
+                highs = [b["high"] for b in slimmed]
+                if pc is not None:
+                    lows.append(pc)
+                    highs.append(pc)
+                pad = (max(highs) - min(lows)) * 0.03 or min(lows) * 0.01
+                entry["price_min"] = round(min(lows)  - pad, 2)
+                entry["price_max"] = round(max(highs) + pad, 2)
             entry["overlays"] = (
                 [{"type": "hline", "price": pc, "color": "rgba(255,255,255,0.5)",
                   "dash": [4, 4], "label": "Prev Close"}]
@@ -229,11 +258,14 @@ async def get_market_analysis() -> dict:
             entry["day_change_pct"] = None
         else:
             bars = result.get("bars", [])
-            entry["day_change_pct"] = _day_change_pct(bars)
+            pct = _day_change_pct(bars)
+            entry["day_change_pct"] = pct
             entry["data_source"]    = result.get("data_source")
             if bars:
                 entry["current_price"] = bars[-1]["close"]
                 entry["prev_close"]    = bars[-2]["close"] if len(bars) >= 2 else None
+        entry["bar_color"]     = _pct_color(entry.get("day_change_pct"))
+        entry["formatted_pct"] = _fmt_pct(entry.get("day_change_pct"))
         sectors.append(entry)
 
     sectors.sort(key=lambda x: x.get("day_change_pct") or 0.0, reverse=True)
@@ -245,21 +277,46 @@ async def get_market_analysis() -> dict:
     else:
         tsy_yields = tsy_result.get("yields", [])
         tsy_as_of  = tsy_result.get("as_of")
+        for y in tsy_yields:
+            bps = y.get("change_bps")
+            yld = y.get("yield_pct")
+            y["change_color"]    = (_UP if (bps or 0) > 0 else _DOWN if (bps or 0) < 0 else "#888888")
+            y["formatted_yield"] = f"{yld:.3f}%" if yld is not None else "N/A"
+            y["formatted_change"] = (
+                f"+{bps:.1f} bps" if bps is not None and bps > 0
+                else f"{bps:.1f} bps" if bps is not None
+                else "N/A"
+            )
 
     # --- VIX ----------------------------------------------------------------
     if isinstance(vix_result, Exception):
         vix = {"symbol": "VIX", "error": str(vix_result), "current_level": None,
-               "prev_level": None, "day_change_pct": None}
+               "prev_level": None, "day_change_pct": None, "regime": None,
+               "pct_color": None, "formatted_pct": "N/A"}
     else:
         bars = vix_result.get("bars", [])
         curr = bars[-1]["close"] if bars else None
         prev = bars[-2]["close"] if len(bars) >= 2 else None
+        vix_pct = _day_change_pct(bars)
+        if curr is None:
+            regime = None
+        elif curr < 15:
+            regime = "complacent"
+        elif curr < 20:
+            regime = "normal"
+        elif curr < 30:
+            regime = "elevated"
+        else:
+            regime = "fear/crisis"
         vix = {
-            "symbol":        "VIX",
-            "current_level": curr,
-            "prev_level":    prev,
-            "day_change_pct": _day_change_pct(bars),
-            "data_source":   vix_result.get("data_source"),
+            "symbol":         "VIX",
+            "current_level":  curr,
+            "prev_level":     prev,
+            "day_change_pct": vix_pct,
+            "regime":         regime,
+            "pct_color":      _pct_color(vix_pct),
+            "formatted_pct":  _fmt_pct(vix_pct),
+            "data_source":    vix_result.get("data_source"),
         }
 
     # --- Knowledge ----------------------------------------------------------
