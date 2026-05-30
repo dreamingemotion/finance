@@ -70,6 +70,20 @@ def _day_change_pct(bars: list[dict]) -> float | None:
     return round((curr - prev) / prev * 100, 2)
 
 
+def _slim_bars(bars: list[dict]) -> list[dict]:
+    """Strip volume and round OHLCV values to reduce response payload size."""
+    return [
+        {
+            "time":  b["time"],
+            "open":  round(b["open"],  2),
+            "high":  round(b["high"],  2),
+            "low":   round(b["low"],   2),
+            "close": round(b["close"], 2),
+        }
+        for b in bars
+    ]
+
+
 def _yield_curve_spreads(yields: list[dict]) -> dict:
     """Compute spread metrics so the LLM can characterise curve shape."""
     by_mat = {y["maturity"]: y.get("yield_pct") for y in yields}
@@ -129,7 +143,7 @@ async def get_market_analysis() -> dict:
     n_tsy = len(_TREASURY_DEFS)
 
     results = await asyncio.gather(
-        *[get_bars(d["symbol"], period="1y", interval="1d") for d in _INDEX_DEFS],
+        *[get_bars(d["symbol"], period="1d", interval="5m") for d in _INDEX_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _SECTOR_DEFS],
         *[get_bars(d["symbol"], period="5d", interval="1d") for d in _TREASURY_DEFS],
         get_bars("VIX", period="5d", interval="1d"),
@@ -147,14 +161,14 @@ async def get_market_analysis() -> dict:
     charts: list[dict] = []
     for render_order, (defn, result) in enumerate(zip(_INDEX_DEFS, idx_results)):
         entry: dict = {
-            "render_order":      render_order,
-            "grid_position":     defn["grid_position"],
-            "label":             defn["label"],
-            "symbol":            defn["symbol"],
-            "period":            "1y",
-            "interval":          "1d",
-            "suppress_time_gaps": False,
-            "chart_style":       _CHART_STYLE,
+            "render_order":       render_order,
+            "grid_position":      defn["grid_position"],
+            "label":              defn["label"],
+            "symbol":             defn["symbol"],
+            "period":             "1d",
+            "interval":           "5m",
+            "suppress_time_gaps": True,
+            "chart_style":        _CHART_STYLE,
         }
         if isinstance(result, Exception):
             entry["error"]          = str(result)
@@ -163,8 +177,9 @@ async def get_market_analysis() -> dict:
             entry["bar_count"]      = 0
         else:
             bars = result.get("bars", [])
-            entry["bars"]           = bars
-            entry["bar_count"]      = result.get("bar_count", len(bars))
+            slimmed = _slim_bars(bars)
+            entry["bars"]           = slimmed
+            entry["bar_count"]      = len(slimmed)
             entry["data_source"]    = result.get("data_source")
             entry["last_bar_stale"] = result.get("last_bar_stale")
             entry["day_change_pct"] = _day_change_pct(bars)
@@ -240,8 +255,8 @@ async def get_market_analysis() -> dict:
         "analysis_type": "market_analysis",
         "index_charts": {
             "layout":   "2x2",
-            "period":   "1y",
-            "interval": "1d",
+            "period":   "1d",
+            "interval": "5m",
             "charts":   charts,
         },
         "sector_performance": {

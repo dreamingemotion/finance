@@ -356,7 +356,8 @@ async def get_market_analysis() -> dict:
       top-right:    DJX  — Dow Jones
       bottom-left:  NDX  — Nasdaq 100
       bottom-right: RUT  — Russell 2000
-    Each entry has 1-year daily bars (period=1y, interval=1d).
+    Each entry has today's intraday bars (period=1d, interval=5m, ~78 bars).
+    suppress_time_gaps is true — use a sequential index x-axis, not datetime.
 
     Rendering rules:
     - Render the 2×2 grid FIRST, before any text analysis.
@@ -365,8 +366,9 @@ async def get_market_analysis() -> dict:
       and chart_style.down_color (#d85a30). Never substitute other colors.
     - Sort by render_order; place each at its grid_position.
     - Title each panel: "{label}  {day_change_pct:+.2f}%"  e.g. "S&P 500  +0.43%".
-    - Use a date-based x-axis (suppress_time_gaps is false for daily bars).
-    - Each panel must have mouseover tooltips: date, O, H, L, C, % change.
+    - suppress_time_gaps is true: use a sequential index x-axis so pre-market
+      gaps are hidden. Show time labels (HH:MM) from the bar timestamp.
+    - Each panel must have mouseover tooltips: time, O, H, L, C, % change.
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
