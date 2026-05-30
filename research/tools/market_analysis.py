@@ -21,7 +21,7 @@ from research.tools.market_data import _CHART_STYLE, get_bars
 _INDEX_DEFS = [
     {"symbol": "SPX", "label": "S&P 500",     "grid_position": "top-left"},
     {"symbol": "DJX", "label": "Dow Jones",   "grid_position": "top-right"},
-    {"symbol": "NDX", "label": "Nasdaq 100",  "grid_position": "bottom-left"},
+    {"symbol": "COMP", "label": "Nasdaq Composite", "grid_position": "bottom-left"},
     {"symbol": "IWM", "label": "Russell 2000", "grid_position": "bottom-right"},
 ]
 

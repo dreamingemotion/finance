@@ -355,7 +355,7 @@ async def get_market_analysis() -> dict:
     grid_position ("top-left", "top-right", "bottom-left", "bottom-right"):
       top-left:     SPX  — S&P 500
       top-right:    DJX  — Dow Jones
-      bottom-left:  NDX  — Nasdaq 100
+      bottom-left:  COMP — Nasdaq Composite
       bottom-right: RUT  — Russell 2000
     Each entry has today's intraday bars (period=1d, interval=5m, ~78 bars).
     suppress_time_gaps is true — use a sequential index x-axis, not datetime.
