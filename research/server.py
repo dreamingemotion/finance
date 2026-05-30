@@ -398,7 +398,18 @@ async def get_market_analysis() -> dict:
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
     - Incorporate any relevant insights from knowledge.sector.results.
 
-    ── SECTION 3: TREASURY YIELDS (treasury_yields) ────────────────────────
+    ── SECTION 3: VIX (vix) ─────────────────────────────────────────────────
+    vix contains current_level, prev_level, and day_change_pct. No chart.
+
+    Render the VIX level and day % change before the treasury section.
+    Write a short VIX commentary (2–3 sentences):
+    - State the current VIX level and day % change (e.g. "VIX rose 4.2% to 18.3").
+    - Characterise the implied volatility regime: <15 complacent, 15–20 normal,
+      20–30 elevated, >30 fear/crisis.
+    - Note whether VIX direction confirms or contradicts the equity price action.
+    - Incorporate any relevant insights from knowledge.volatility.results.
+
+    ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
     Each entry has yield_pct (percent), change_bps (basis points vs prior close),
     and prev_yield_pct. Entries with no data have yield_pct=null.
@@ -425,16 +436,6 @@ async def get_market_analysis() -> dict:
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
     - Incorporate any relevant insights from knowledge.yields.results.
-
-    ── SECTION 4: VIX (vix) ─────────────────────────────────────────────────
-    vix contains current_level, prev_level, and day_change_pct. No chart.
-
-    After the yield analysis, add a short VIX commentary (2–3 sentences):
-    - State the current VIX level and day % change (e.g. "VIX rose 4.2% to 18.3").
-    - Characterise the implied volatility regime: <15 complacent, 15–20 normal,
-      20–30 elevated, >30 fear/crisis.
-    - Note whether VIX direction confirms or contradicts the equity price action.
-    - Incorporate any relevant insights from knowledge.volatility.results.
 
     ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
     knowledge contains three keys — sector, yields, volatility — each with

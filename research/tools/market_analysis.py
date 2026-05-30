@@ -271,12 +271,12 @@ async def get_market_analysis() -> dict:
             "sort":      "day_change_pct_desc",
             "sectors":   sectors,
         },
+        "vix": vix,
         "treasury_yields": {
             "render_as":  "table_and_yield_curve",
             "maturities": ["3M", "2Y", "5Y", "10Y", "30Y"],
             "yields":     yields,
             "curve_shape": _yield_curve_spreads(yields),
         },
-        "vix": vix,
         "knowledge": knowledge,
     }
