@@ -155,6 +155,10 @@ OPENAI_BASE_URL=https://openrouter.ai/api/v1
 # Required — shared with auth server
 JWT_SECRET=<same value as knowledge server>
 AUTH_SERVER_URL=https://mcp.unfolding.in/servers/finance/auth
+
+# FRED API — required for Treasury yields and get_fred_series tool
+# Free key: https://fred.stlouisfed.org/docs/api/api_key.html
+FRED_API_KEY=<your FRED API key>
 ```
 
 ### 2. Systemd service
