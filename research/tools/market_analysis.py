@@ -211,7 +211,13 @@ async def get_market_analysis() -> dict:
                 round((last_close - prev_close) / prev_close * 100, 2)
                 if prev_close and last_close else None
             )
-            entry["prev_close"] = round(prev_close, 2) if prev_close else None
+            pc = round(prev_close, 2) if prev_close else None
+            entry["prev_close"] = pc
+            entry["overlays"] = (
+                [{"type": "hline", "price": pc, "color": "rgba(255,255,255,0.5)",
+                  "dash": [4, 4], "label": "Prev Close"}]
+                if pc is not None else []
+            )
         charts.append(entry)
 
     # --- Sector performance --------------------------------------------------

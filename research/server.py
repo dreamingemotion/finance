@@ -376,31 +376,30 @@ async def get_market_analysis() -> dict:
       Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
-    - REQUIRED — previous close line. This MUST be drawn in every panel.
-      Each chart entry has a numeric field called prev_close — this is the
-      previous session's closing price pre-computed on the server. It is a
-      standalone number on the chart object, NOT derived from bars[0].open
-      or any value in the bars array. Do NOT use bars[0].open, bars[0].close,
-      or any bars value for this line. Read chart.prev_close directly.
-      After all candles are drawn, compute its pixel y-coordinate using the
-      same minPrice/maxPrice/chartHeight variables used to place the candles:
-        const refPrice = chart.prev_close;  // read from chart data, not bars
-        const prevCloseY = chartHeight - ((refPrice - minPrice) / (maxPrice - minPrice)) * chartHeight;
-      Then draw:
-        ctx.save();
-        ctx.setLineDash([4, 4]);
-        ctx.strokeStyle = "rgba(255,255,255,0.5)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(0, prevCloseY);
-        ctx.lineTo(chartWidth, prevCloseY);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = "rgba(255,255,255,0.6)";
-        ctx.font = "10px sans-serif";
-        ctx.fillText("Prev Close", chartWidth - 62, prevCloseY - 3);
-        ctx.restore();
-      The label MUST read "Prev Close". Do NOT use "Open" or any other text.
+    - REQUIRED — after drawing all candles, draw reference overlays.
+      Each chart entry has an overlays array. Iterate it exactly as shown:
+        for (const ov of chart.overlays) {
+          if (ov.type === "hline") {
+            // ov.price is a pre-computed number from the server — do NOT
+            // replace it with bars[0].open or any value from the bars array.
+            const lineY = chartHeight - ((ov.price - minPrice) / (maxPrice - minPrice)) * chartHeight;
+            ctx.save();
+            ctx.setLineDash(ov.dash || [4, 4]);
+            ctx.strokeStyle = ov.color;
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(0, lineY);
+            ctx.lineTo(chartWidth, lineY);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            ctx.fillStyle = "rgba(255,255,255,0.6)";
+            ctx.font = "10px sans-serif";
+            ctx.fillText(ov.label, chartWidth - 62, lineY - 3);
+            ctx.restore();
+          }
+        }
+      Use ov.label verbatim as the text — do NOT substitute "Open" or any
+      other string. The server sets ov.label = "Prev Close".
 
     ── SECTION 2: SECTOR PERFORMANCE (sector_performance) ──────────────────
     sector_performance.sectors lists all 11 GICS sectors via SPDR ETFs,
