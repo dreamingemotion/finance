@@ -416,6 +416,8 @@ async def get_market_analysis() -> dict:
     - Use sector.bar_color for each bar's fill color (pre-computed).
     - Annotate each bar with sector.formatted_pct (pre-formatted string).
     - Sectors with a null day_change_pct (data unavailable) show a grey bar.
+    - Use #999999 for ALL text labels — sector names on the left AND
+      percentage annotations on the right. Do not use white or black.
     - Use raw Canvas 2D API only. No chart libraries.
 
     After the bar chart write a 3–5 sentence analysis covering:

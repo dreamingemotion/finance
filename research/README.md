@@ -30,7 +30,12 @@ research/
 | Tool | Description |
 |---|---|
 | `get_market_analysis()` | **Daily market overview.** Intraday candlestick charts (5-min) for SPX, DJX, NDX, and IWM in a 2×2 grid; day % change for all 11 S&P 500 sectors as a bar chart; VIX level and day change; Treasury yield table (3M/2Y/5Y/10Y/30Y) from FRED with bps changes and yield curve chart. Includes knowledge base insights for each opinion section. All data fetched in parallel — no web search. |
-| `get_fred_series(series_id, period)` | **FRED economic data.** Fetches any St. Louis Fed time series by ID (e.g. `DGS10`, `FEDFUNDS`, `CPIAUCSL`, `UNRATE`, `GDP`). Returns observations oldest-first with series metadata. Use for macro indicators not available from market data providers. |
+
+### FRED / Economic data
+
+| Tool | Description |
+|---|---|
+| `get_fred_series(series_id, period)` | **FRED economic time series.** Fetches any St. Louis Fed series by ID. Covers Treasury rates (DGS3MO, DGS2, DGS10, …), Fed policy (DFF, FEDFUNDS), inflation (CPIAUCSL, PCEPILFE), employment (UNRATE, PAYEMS, ICSA), GDP, yield spreads (T10Y2Y, T10Y3M), and money supply (M2SL). Returns observations oldest-first with series metadata. Use for macro indicators not available from market data providers. period: 1d–10y. |
 
 ### Analysis
 
