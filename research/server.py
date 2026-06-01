@@ -376,7 +376,11 @@ async def get_market_analysis() -> dict:
       as large bold text. Use chart.pct_color for the text color.
       Both fields are pre-computed — do not reformat or recolor them.
     - suppress_time_gaps is true: use a sequential index x-axis so pre-market
-      gaps are hidden. Show time labels (HH:MM) from the bar timestamp.
+      gaps are hidden. Bar timestamps are in UTC — convert to Eastern Time
+      when formatting x-axis labels:
+        const etLabel = new Date(bar.time).toLocaleTimeString('en-US', {
+          timeZone: 'America/New_York', hour: '2-digit', minute: '2-digit', hour12: false
+        });
     - When computing the y-axis price range, include overlay prices so the
       reference line is always within bounds even on gap days:
         const allPrices = [
@@ -388,8 +392,9 @@ async def get_market_analysis() -> dict:
         const pad    = (rawMax - rawMin) * 0.03;
         const minPrice = rawMin - pad;
         const maxPrice = rawMax + pad;
-    - Each panel must have mouseover tooltips: time, O, H, L, C, % change.
-      Position tooltips within the panel bounds.
+    - Each panel must have mouseover tooltips: time (ET, HH:MM), O, H, L, C,
+      % change. Convert bar.time from UTC to America/New_York for the tooltip
+      time display. Position tooltips within the panel bounds.
     - Before rendering, deduplicate bars: drop any bar where open === 0,
       then deduplicate by composite key (time + open + close).
     - REQUIRED — after drawing all candles, draw reference overlays.
