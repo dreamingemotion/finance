@@ -697,14 +697,21 @@ class DXLinkStreamer:
         *,
         timeout: float | None = None,
     ) -> AsyncGenerator[Event, None]:
-        """Subscribe and yield events. timeout is per-event wait in seconds."""
+        """Subscribe and yield events. timeout is total wall-clock seconds (not per-event)."""
         await self.subscribe(event_cls, symbols)
         q = self._queues[event_cls.EVENT_TYPE]
+        loop = asyncio.get_running_loop()
+        deadline = (loop.time() + timeout) if timeout else None
         while True:
-            try:
-                item = await asyncio.wait_for(q.get(), timeout=timeout)
-            except asyncio.TimeoutError:
+            remaining = (deadline - loop.time()) if deadline else None
+            if remaining is not None and remaining <= 0:
                 return
+            # Poll in ≤2 s chunks so the deadline is checked regularly.
+            wait = min(remaining, 2.0) if remaining is not None else None
+            try:
+                item = await asyncio.wait_for(q.get(), timeout=wait)
+            except asyncio.TimeoutError:
+                continue  # re-check deadline at top of loop
             if isinstance(item, _Closed):
                 if item.exc:
                     raise item.exc
@@ -720,14 +727,20 @@ class DXLinkStreamer:
         *,
         timeout: float | None = None,
     ) -> AsyncGenerator[Candle, None]:
-        """Subscribe and yield Candle events. timeout is per-event wait in seconds."""
+        """Subscribe and yield Candle events. timeout is total wall-clock seconds (not per-event)."""
         await self.subscribe_candles(symbols, period, from_time_ms, regular_hours_only)
         q = self._queues[Candle.EVENT_TYPE]
+        loop = asyncio.get_running_loop()
+        deadline = (loop.time() + timeout) if timeout else None
         while True:
-            try:
-                item = await asyncio.wait_for(q.get(), timeout=timeout)
-            except asyncio.TimeoutError:
+            remaining = (deadline - loop.time()) if deadline else None
+            if remaining is not None and remaining <= 0:
                 return
+            wait = min(remaining, 2.0) if remaining is not None else None
+            try:
+                item = await asyncio.wait_for(q.get(), timeout=wait)
+            except asyncio.TimeoutError:
+                continue
             if isinstance(item, _Closed):
                 if item.exc:
                     raise item.exc
