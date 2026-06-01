@@ -465,9 +465,8 @@ async def get_market_analysis() -> dict:
 
     Rendering rules:
     - Render the section header "Treasury Yields" followed immediately by a
-      subtitle showing the FRED publication date:
-        "As of {treasury_yields.as_of}" (e.g. "As of 2026-05-29")
-      Display the subtitle in small grey text below the header.
+      subtitle in small grey text:
+        "As of {treasury_yields.as_of} · FRED publishes at ~4:15 PM ET on business days"
     - Render a table: Maturity | Yield (%) | Change (bps).
       Display yield.formatted_yield and yield.formatted_change — pre-formatted
       strings (e.g. "4.352%" and "+2.0 bps"). Show "N/A" as-is.
