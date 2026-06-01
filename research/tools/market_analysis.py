@@ -9,6 +9,7 @@ No web searches are performed.
 from __future__ import annotations
 
 import asyncio
+from datetime import datetime, timezone
 
 from research.tools.fred import get_treasury_yields
 from research.tools.knowledge import search_knowledge
@@ -53,6 +54,11 @@ _KNOWLEDGE_QUERIES = [
 
 _UP   = _CHART_STYLE["up_color"]    # #1d9e75
 _DOWN = _CHART_STYLE["down_color"]  # #d85a30
+
+
+def _ordinal(n: int) -> str:
+    suffix = "th" if 11 <= n % 100 <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(n % 10, "th")
+    return f"{n}{suffix}"
 
 
 def _pct_color(pct: float | None) -> str:
@@ -324,8 +330,12 @@ async def get_market_analysis() -> dict:
     for (key, _, _), result in zip(_KNOWLEDGE_QUERIES, kn_results):
         knowledge[key] = result if not isinstance(result, Exception) else {"error": str(result)}
 
+    now = datetime.now(timezone.utc)
+    analysis_date = f"{now.strftime('%B')} {_ordinal(now.day)}, {now.year}"
+
     return {
         "analysis_type": "market_analysis",
+        "analysis_date": analysis_date,
         "index_charts": {
             "layout":   "2x2",
             "period":   "1d",

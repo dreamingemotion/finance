@@ -348,7 +348,12 @@ async def get_market_analysis() -> dict:
     Do NOT call get_bars, get_quote, or get_snapshot separately to assemble
     this — all data is returned in a single parallel fetch here.
 
-    Returns three sections. Follow all rendering rules exactly.
+    Returns the following sections. Follow all rendering rules exactly.
+
+    ── HEADER ────────────────────────────────────────────────────────────────
+    Display "Market Analysis for {analysis_date}" as a prominent title at the
+    very top, before any charts or analysis. analysis_date is a pre-formatted
+    string (e.g. "June 1st, 2026") — use it verbatim.
 
     ── SECTION 1: INDEX CHARTS (index_charts) ──────────────────────────────
     index_charts.charts contains four entries with render_order (0–3) and
