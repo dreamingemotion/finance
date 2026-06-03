@@ -1,13 +1,15 @@
 """
 Document ingestion pipeline.
 
-Calls Claude via OpenRouter in two parallel passes:
+Two-step flow:
+  1. extract_chunks(title, content)               — LLM extraction, returns chunks for review
+  2. commit_document(db, title, content, chunks)  — embed + save approved chunks to DB
+
+Extraction uses two parallel passes:
   1. Factual pass  — durable patterns, relationships, and mechanisms (no point-in-time data)
   2. Inference pass — methodologies, causal chains, comparative patterns, open-ended inferences
 
-Before the extraction passes, a cheap classification call determines whether the
-inference pass is warranted. Both extraction chunks are embedded in a single
-batched call and stored atomically under the same document ID.
+A cheap classification call determines whether the inference pass is warranted.
 
 Environment variables:
   OPENROUTER_API_KEY    your OpenRouter API key
@@ -149,24 +151,56 @@ async def _classify_inference(content: str, title: str) -> bool:
     return json.loads(raw)["run_inference"]
 
 
-async def ingest_document(
+async def extract_chunks(title: str, content: str) -> dict:
+    """
+    Run LLM extraction passes and return chunks for review — does NOT write to DB.
+
+    Each chunk includes a "pass" field ("factual" or "inference") so the reviewer
+    can see which pass produced it. Chunks can be edited, removed, or reordered
+    before passing to commit_document.
+
+    Returns:
+      title, inference_run, factual_count, inference_count, chunks
+    """
+    run_inference = await _classify_inference(content, title)
+
+    if run_inference:
+        factual_chunks, inference_chunks = await asyncio.gather(
+            _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
+            _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
+        )
+    else:
+        factual_chunks = await _extract(_FACTUAL_SYSTEM_PROMPT, content, title)
+        inference_chunks = []
+
+    for c in factual_chunks:
+        c["pass"] = "factual"
+    for c in inference_chunks:
+        c["pass"] = "inference"
+
+    return {
+        "title": title,
+        "inference_run": run_inference,
+        "factual_count": len(factual_chunks),
+        "inference_count": len(inference_chunks),
+        "chunks": factual_chunks + inference_chunks,
+    }
+
+
+async def commit_document(
     db,
     title: str,
     content: str,
+    chunks: list[dict],
     source_url: str | None = None,
     overwrite: bool = False,
-    run_inference: bool | None = None,
 ) -> dict:
     """
-    Full ingestion pipeline:
-      1. Check for a duplicate by content hash — if found, return duplicate info
-         unless overwrite=True, in which case the existing document is deleted first
-      2. Run factual and inference extraction passes concurrently
-      3. Embed all chunks in a single batched API call
-      4. Store document + chunks + categories atomically in a transaction
+    Embed and save a pre-approved chunk list to the database.
 
-    Returns a summary: document_id, total chunks_stored, per-pass counts,
-    and any new categories discovered.
+    Accepts chunks from extract_chunks (with optional edits). The "pass" field
+    is used for reporting only and stripped before storage. content is required
+    for duplicate detection and raw_content storage.
     """
     content_hash = hashlib.sha256(content.encode()).hexdigest()
     uploaded_by = get_current_user().get("user_id") or None
@@ -183,7 +217,7 @@ async def ingest_document(
             "message": (
                 f"This content was already ingested as '{existing['title']}' "
                 f"(id={existing['id']}). Ask the user whether to overwrite or cancel. "
-                f"To overwrite, call ingest_document again with overwrite=True."
+                f"To overwrite, call commit_ingest again with overwrite=True."
             ),
         }
     if existing and overwrite:
@@ -191,31 +225,20 @@ async def ingest_document(
             "DELETE FROM knowledge.documents WHERE id = $1", existing["id"]
         )
 
-    if run_inference is None:
-        run_inference = await _classify_inference(content, title)
-
-    if run_inference:
-        factual_chunks, inference_chunks = await asyncio.gather(
-            _extract(_FACTUAL_SYSTEM_PROMPT, content, title),
-            _extract(_INFERENCE_SYSTEM_PROMPT, content, title),
-        )
-    else:
-        factual_chunks = await _extract(_FACTUAL_SYSTEM_PROMPT, content, title)
-        inference_chunks = []
-
-    all_chunks = factual_chunks + inference_chunks
-    if not all_chunks:
+    if not chunks:
         return {
             "document_id": None,
             "title": title,
             "chunks_stored": 0,
             "factual_chunks": 0,
             "inference_chunks": 0,
-            "inference_run": run_inference,
             "new_categories": [],
         }
 
-    vectors = await embed([c["content"] for c in all_chunks])
+    factual_count = sum(1 for c in chunks if c.get("pass") == "factual")
+    inference_count = sum(1 for c in chunks if c.get("pass") == "inference")
+
+    vectors = await embed([c["content"] for c in chunks])
 
     new_categories: set[str] = set()
 
@@ -229,7 +252,7 @@ async def ingest_document(
             title, source_url, content, content_hash, uploaded_by,
         )
 
-        for chunk_data, vector in zip(all_chunks, vectors):
+        for chunk_data, vector in zip(chunks, vectors):
             vec_str = f"[{','.join(str(v) for v in vector)}]"
 
             chunk_id = await db.fetchval(
@@ -261,9 +284,25 @@ async def ingest_document(
     return {
         "document_id": doc_id,
         "title": title,
-        "chunks_stored": len(all_chunks),
-        "factual_chunks": len(factual_chunks),
-        "inference_chunks": len(inference_chunks),
-        "inference_run": run_inference,
+        "chunks_stored": len(chunks),
+        "factual_chunks": factual_count,
+        "inference_chunks": inference_count,
         "new_categories": sorted(new_categories),
     }
+
+
+async def ingest_document(
+    db,
+    title: str,
+    content: str,
+    source_url: str | None = None,
+    overwrite: bool = False,
+    run_inference: bool | None = None,
+) -> dict:
+    """
+    Single-call ingestion — skips review. Prefer preview_ingest + commit_ingest
+    when human approval is desired.
+    """
+    extracted = await extract_chunks(title, content)
+    chunks = extracted["chunks"]
+    return await commit_document(db, title, content, chunks, source_url, overwrite)

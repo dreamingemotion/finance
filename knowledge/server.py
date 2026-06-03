@@ -34,12 +34,64 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from mcp.server.fastmcp import FastMCP
 from shared.knowledge.db import close_pool, get_db, init_db
 from shared.knowledge.retriever import KnowledgeRetriever
+from knowledge.ingest import extract_chunks as _extract_chunks
+from knowledge.ingest import commit_document as _commit_document
 from knowledge.ingest import ingest_document as _ingest
 
 _host = os.getenv("KNOWLEDGE_HOST", "0.0.0.0")
 _port = int(os.getenv("KNOWLEDGE_PORT", "8092"))
 
 mcp = FastMCP("finance-knowledge", host=_host, port=_port)
+
+
+@mcp.tool()
+async def preview_ingest(
+    title: str,
+    content: str,
+) -> dict:
+    """
+    Step 1 of 2: extract chunks from a document and return them for review.
+    Does NOT write anything to the database.
+
+    Runs a factual extraction pass and, if the document contains analysis or
+    commentary, a second inference pass (methodologies, causal chains,
+    comparative patterns, open-ended inferences).
+
+    Each chunk includes:
+      - content: the extracted insight
+      - categories: 1-3 category tags
+      - pass: "factual" or "inference"
+
+    Present the chunks to the user. They can approve as-is, ask you to edit,
+    remove, or reword individual chunks. Once approved, call commit_ingest
+    with the final chunk list to embed and save.
+    """
+    return await _extract_chunks(title, content)
+
+
+@mcp.tool()
+async def commit_ingest(
+    title: str,
+    content: str,
+    chunks: list[dict],
+    source_url: str | None = None,
+    overwrite: bool = False,
+) -> dict:
+    """
+    Step 2 of 2: embed and save approved chunks to the knowledge base.
+
+    Pass the chunks list exactly as returned by preview_ingest, after any
+    edits the user requested. The "pass" field on each chunk is used for
+    reporting and ignored during storage.
+
+    content must be the same original text passed to preview_ingest —
+    it is stored as raw_content and used for duplicate detection.
+
+    If the content was already ingested, returns {"duplicate": true, ...}.
+    Call again with overwrite=True to replace the existing document.
+    """
+    async with get_db() as db:
+        return await _commit_document(db, title, content, chunks, source_url, overwrite)
 
 
 @mcp.tool()
@@ -50,19 +102,10 @@ async def ingest_document(
     overwrite: bool = False,
 ) -> dict:
     """
-    Ingest a document into the knowledge base.
+    Single-call ingestion — skips the review step.
 
-    Runs a factual extraction pass. A cheap classification call automatically
-    determines whether a second inference pass (methodologies, causal chains,
-    comparisons, non-obvious conclusions) is warranted — it is skipped for
-    purely factual content such as raw price tables or data exports.
-
-    Call this after reading a file the user has uploaded. Pass the full text
-    as content and a descriptive title. source_url is optional.
-
-    If the content was already ingested, returns {"duplicate": true, ...}
-    with the existing document's id and title. Ask the user whether to
-    overwrite or cancel. If they confirm, call again with overwrite=True.
+    Prefer preview_ingest → commit_ingest when the user should approve
+    chunks before they are saved. Use this only when review is not needed.
     """
     async with get_db() as db:
         return await _ingest(db, title, content, source_url, overwrite)
