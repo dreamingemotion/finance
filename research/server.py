@@ -311,8 +311,10 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       - Do not render line charts unless the user explicitly asks.
 
     After rendering the charts, synthesise directly from the returned data.
-    Do NOT search the web, call other tools, or look up additional data —
-    everything needed is already in the response:
+    Do NOT search the web or look up additional data — everything needed
+    is already in the response. If you need any SEC filing data beyond
+    what is returned here (8-Ks, 10-Qs, proxy statements, etc.), use
+    submit_filing + search_filing — never the web:
       - Historical and current P/E, P/B, FCF, and debt are in valuation.
       - Risk factors, moat, cash flow, and segment performance are in filing.
       - Real-time price and metrics are in snapshot.
