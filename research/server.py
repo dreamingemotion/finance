@@ -336,12 +336,12 @@ async def analyze(symbol: str, full: bool = True) -> dict:
          capital allocation context from the filing (full only).
       8. Segment Performance — revenue and operating income by segment
          from the filing (full only).
-      9. Knowledge Context — any relevant insights from the knowledge base.
-         Use APA in-text citations when referencing a knowledge chunk,
-         e.g. "(Sector Rotation Framework, n.d.)". After the final section,
-         render a "References" list of every knowledge source cited, in APA
-         style: Source Title. (n.d.). Finance Knowledge Base. [source_url if
-         available]. List alphabetically; omit uncited sources.
+      9. Knowledge Context — include only if knowledge chunks are directly
+         relevant to the analysis; omit the section entirely if they are not.
+         Use APA in-text citations, e.g. "(Sector Rotation Framework, n.d.)".
+         After the final section, if any sources were cited, render a
+         "References" list in APA style: Source Title. (n.d.). Finance
+         Knowledge Base. [source_url if available]. List alphabetically.
     """
     return await _analyze(symbol, full=full)
 
@@ -451,10 +451,9 @@ async def get_market_analysis() -> dict:
     - Which sectors led and lagged and what the spread implies.
     - Whether the rotation pattern suggests risk-on or risk-off positioning.
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
-    - Incorporate insights from knowledge.sector.results into the analysis.
-      Use APA in-text citations when referencing a knowledge chunk, e.g.:
-      "Defensive leadership on a flat tape often precedes a risk-off leg
-      (Sector Rotation Framework, n.d.)."
+    - If any knowledge.sector.results are directly relevant to what the data
+      shows, incorporate them. If not, omit them entirely. When citing, use
+      APA in-text style, e.g. "(Sector Rotation Framework, n.d.)".
 
     ── SECTION 3: VIX (vix) ─────────────────────────────────────────────────
     vix contains current_level, prev_level, and day_change_pct. No chart.
@@ -465,9 +464,9 @@ async def get_market_analysis() -> dict:
     - Name the regime from vix.regime (pre-computed: complacent / normal /
       elevated / fear/crisis) — do not recompute it from the level.
     - Note whether VIX direction confirms or contradicts the equity price action.
-    - Incorporate insights from knowledge.volatility.results into the analysis.
-      Use APA in-text citations when referencing a knowledge chunk,
-      e.g. "(VIX Regime Framework, n.d.)".
+    - If any knowledge.volatility.results are directly relevant to what the
+      data shows, incorporate them. If not, omit them entirely. When citing,
+      use APA in-text style, e.g. "(VIX Regime Framework, n.d.)".
 
     ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
@@ -499,16 +498,18 @@ async def get_market_analysis() -> dict:
     - Current curve shape (normal, flat, inverted, or humped) using curve_shape.
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
-    - Incorporate insights from knowledge.yields.results into the analysis.
-      Use APA in-text citations when referencing a knowledge chunk,
-      e.g. "(Yield Curve Interpretation, n.d.)".
+    - If any knowledge.yields.results are directly relevant to what the data
+      shows, incorporate them. If not, omit them entirely. When citing, use
+      APA in-text style, e.g. "(Yield Curve Interpretation, n.d.)".
 
     ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
     knowledge contains three keys — sector, yields, volatility — each with
     a results list of relevant knowledge base chunks (content, source, score).
-    Weave these insights into the opinion sections above rather than listing
-    them separately. If a knowledge section has an error or empty results,
-    skip it silently.
+    Use knowledge chunks only when they are directly relevant to what the
+    market data shows — do not force them in. If a chunk does not add
+    meaningful context to the observed behavior, omit it. Weave any used
+    insights into the appropriate section above rather than listing them
+    separately. Skip silently on error or empty results.
 
     After all sections, write a 2–3 sentence overall market summary tying
     together the index moves, sector rotation, yield curve, and VIX into a
