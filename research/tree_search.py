@@ -22,7 +22,6 @@ from research.tree_builder import structure_to_list
 
 logger = logging.getLogger("finance-research")
 
-REASONING_THRESHOLD = 3
 
 _NOISE_TITLES = frozenset({
     "table of contents", "index", "signatures", "power of attorney",
@@ -199,11 +198,12 @@ async def search_trees(
     use_reasoning: bool = True,
 ) -> list[dict]:
     """
-    Search across indexed trees using keyword scoring with LLM fallback.
+    Search across indexed trees using LLM relevancy scoring with keyword fallback.
 
     If doc_id is given, search only that document.
-    If keyword scores are weak and use_reasoning=True, invoke LLM to
-    navigate the tree structure and identify the best sections.
+    If use_reasoning=True (default), Haiku always determines relevancy by
+    navigating the tree structure. Keyword results are used only if the LLM
+    call fails or returns nothing.
     """
     terms = [t for t in re.split(r"\s+", query.strip()) if t]
     if not terms:
@@ -223,20 +223,13 @@ async def search_trees(
         d_nm = t.get("doc_name", rec.get("source_file", ""))
         all_nodes.extend(_flatten(t.get("structure", []), doc_id=d_id, doc_name=d_nm))
 
-    keyword_results = _keyword_search(all_nodes, terms, max_results)
-    top_score       = keyword_results[0]["score"] if keyword_results else 0
-
-    if top_score >= REASONING_THRESHOLD:
-        return keyword_results
-
-    if use_reasoning and record and top_score < REASONING_THRESHOLD:
+    if use_reasoning and record:
         reasoning_results = await _reasoning_search(query, record, max_results)
         if reasoning_results:
-            seen = {(r["doc_id"], r["node_id"]) for r in reasoning_results}
-            for kr in keyword_results:
-                if (kr["doc_id"], kr["node_id"]) not in seen:
-                    reasoning_results.append(kr)
             return reasoning_results[:max_results]
+
+    # Keyword fallback — used when reasoning is disabled or LLM call failed
+    return _keyword_search(all_nodes, terms, max_results)
 
     return keyword_results
 
