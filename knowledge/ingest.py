@@ -14,7 +14,7 @@ A cheap classification call determines whether the inference pass is warranted.
 Environment variables:
   OPENROUTER_API_KEY    your OpenRouter API key
   GENERATION_MODEL      anthropic/claude-sonnet-4-6 (default)
-  CLASSIFICATION_MODEL  google/gemini-2.5-flash (default)
+  CLASSIFICATION_MODEL  google/gemini-3.1-flash-lite (default)
 """
 from __future__ import annotations
 
@@ -134,7 +134,7 @@ async def _extract(system_prompt: str, content: str, title: str) -> list[dict]:
 
 async def _classify_inference(content: str, title: str) -> bool:
     client = _make_client()
-    model = os.environ.get("CLASSIFICATION_MODEL", "google/gemini-2.5-flash")
+    model = os.environ.get("CLASSIFICATION_MODEL", "google/gemini-3.1-flash-lite")
 
     response = await client.chat.completions.create(
         model=model,
