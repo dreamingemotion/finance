@@ -2,8 +2,8 @@
 Document ingestion pipeline.
 
 Calls Claude via OpenRouter in two parallel passes:
-  1. Factual pass  — discrete claims, data points, and observations
-  2. Inference pass — methodologies, causal chains, comparisons, non-obvious inferences
+  1. Factual pass  — durable patterns, relationships, and mechanisms (no point-in-time data)
+  2. Inference pass — methodologies, causal chains, comparative patterns, open-ended inferences
 
 Before the extraction passes, a cheap classification call determines whether the
 inference pass is warranted. Both extraction chunks are embedded in a single
@@ -30,12 +30,17 @@ from shared.knowledge.embedder import embed
 _FACTUAL_SYSTEM_PROMPT = """\
 You are a financial research analyst extracting investment insights from articles.
 
-Extract discrete, self-contained insight units — each a specific claim, data point, \
-or actionable observation that stands completely alone without needing the rest of the article.
+Extract discrete, self-contained insight units — each a durable claim, relationship, \
+or observation that remains true and useful beyond the article's publication date.
 
 Rules:
 - Each insight must be understandable with no surrounding context
-- Preserve specific numbers, percentages, thresholds, and named entities
+- Extract patterns, mechanisms, thresholds, and relationships — not snapshots
+- Do NOT extract point-in-time data: current prices, today's rates, this quarter's \
+  earnings, recent percentage moves, or any value anchored to a specific date
+- Numbers and percentages are acceptable only when they describe a durable threshold \
+  or historical pattern (e.g. "credit spreads above 500bps have historically signaled \
+  recession"), not a current reading
 - One insight per distinct idea; do not bundle unrelated claims
 - Assign 1-3 categories per insight from the provided list
 - Suggest a new snake_case category name only if truly nothing fits
@@ -67,17 +72,21 @@ Focus on four types:
 1. Analytical methodologies — frameworks, models, or approaches used or referenced
 2. Causal chains — if-then sequences implied by the analysis \
    (e.g. "rising rates → spread compression → credit selloff")
-3. Explicit comparisons — what direct comparisons in the article reveal about \
-   relative value, risk, or positioning
+3. Comparative patterns — what the comparisons in the article reveal about \
+   relative value, risk, or positioning as a durable tendency, not a current snapshot
 4. Non-obvious investable inferences — conclusions not stated directly but \
-   logically implied by the data or argument
+   logically implied by the argument, expressed as open-ended principles
 
 Rules:
+- All insights must be open-ended and applicable beyond the article's publication date
+- Do NOT reference specific current prices, rates, valuations, or any value anchored \
+  to a specific date — rephrase as conditions or patterns instead
+- Do NOT extract point-in-time data: current readings, recent percentage moves, \
+  this quarter's results, or named market events tied to a specific moment
 - Only extract insights that genuinely exist in the material — if the document is \
   purely factual data (e.g. raw price tables, earnings releases with no commentary) \
   and none of the four types apply, return an empty array
 - Each insight must be self-contained and independently understandable
-- Preserve specific numbers, entities, and relationships
 - Always include "methodology" for type-1 insights; always include "inference" \
   for types 2-4
 - Add 1-2 extra categories from the provided list when clearly relevant
