@@ -351,9 +351,19 @@ async def get_market_analysis() -> dict:
     """
     ALWAYS call this tool — and only this tool — when the user asks for a
     Market Analysis, daily market overview, or market summary.
-    Do NOT search the web, use WebSearch, or fetch any URLs for market data.
     Do NOT call get_bars, get_quote, or get_snapshot separately to assemble
     this — all data is returned in a single parallel fetch here.
+
+    Market DATA must come exclusively from this tool — do not use WebSearch
+    or fetch any URLs to obtain prices, quotes, yields, or index levels.
+
+    Current events are permitted via WebSearch: after rendering the charts
+    and before writing the analysis text, search the web for news that
+    explains the observed market behavior — sector rotations, yield swings,
+    risk-on/risk-off moves, VIX spikes, or any notable divergence. Use the
+    search results to provide "why" context in each analysis section.
+    Cite news sources inline using the article headline and outlet, e.g.
+    "(Reuters, June 3, 2026)".
 
     Returns the following sections. Follow all rendering rules exactly.
 
