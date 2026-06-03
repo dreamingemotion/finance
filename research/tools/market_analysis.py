@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 from research.tools.fred import get_treasury_yields
 from research.tools.knowledge import search_knowledge
-from research.tools.market_data import _CHART_STYLE, get_bars
+from research.tools.market_data import _CHART_STYLE, get_bars, get_quote
 
 # ---------------------------------------------------------------------------
 # Symbol definitions
@@ -178,7 +178,7 @@ async def get_market_analysis() -> dict:
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
-        *[get_bars(d["symbol"], period="2d", interval="5m") for d in _SECTOR_DEFS],
+        *[get_quote(d["symbol"]) for d in _SECTOR_DEFS],
         get_treasury_yields(),
         get_bars("VIX", period="5d", interval="1d"),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
@@ -263,18 +263,17 @@ async def get_market_analysis() -> dict:
             entry["error"]          = str(result)
             entry["day_change_pct"] = None
         else:
-            all_bars = result.get("bars", [])
-            today_bars, prev_close = _split_today_bars(all_bars)
-            last_close = today_bars[-1]["close"] if today_bars else None
+            current = result.get("mark") or result.get("last")
+            prev_close = result.get("close")
             pct = (
-                round((last_close - prev_close) / prev_close * 100, 2)
-                if prev_close and last_close else None
+                round((current - prev_close) / prev_close * 100, 2)
+                if prev_close and current else None
             )
             entry["day_change_pct"] = pct
             entry["data_source"]    = result.get("data_source")
-            if today_bars:
-                entry["current_price"] = last_close
-                entry["prev_close"]    = round(prev_close, 2) if prev_close is not None else None
+            if current is not None:
+                entry["current_price"] = current
+                entry["prev_close"]    = prev_close
         entry["bar_color"]     = _pct_color(entry.get("day_change_pct"))
         entry["formatted_pct"] = _fmt_pct(entry.get("day_change_pct"))
         sectors.append(entry)
