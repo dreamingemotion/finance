@@ -337,6 +337,11 @@ async def analyze(symbol: str, full: bool = True) -> dict:
       8. Segment Performance — revenue and operating income by segment
          from the filing (full only).
       9. Knowledge Context — any relevant insights from the knowledge base.
+         Use APA in-text citations when referencing a knowledge chunk,
+         e.g. "(Sector Rotation Framework, n.d.)". After the final section,
+         render a "References" list of every knowledge source cited, in APA
+         style: Source Title. (n.d.). Finance Knowledge Base. [source_url if
+         available]. List alphabetically; omit uncited sources.
     """
     return await _analyze(symbol, full=full)
 
@@ -437,10 +442,9 @@ async def get_market_analysis() -> dict:
     - Whether the rotation pattern suggests risk-on or risk-off positioning.
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
     - Incorporate insights from knowledge.sector.results into the analysis.
-      Write "**Knowledge Base**" in bold before each such insight, and
-      cite the source title in parentheses, e.g.:
-      "**Knowledge Base** (Sector Rotation Framework): defensive leadership
-      on a flat tape often precedes a risk-off leg."
+      Use APA in-text citations when referencing a knowledge chunk, e.g.:
+      "Defensive leadership on a flat tape often precedes a risk-off leg
+      (Sector Rotation Framework, n.d.)."
 
     ── SECTION 3: VIX (vix) ─────────────────────────────────────────────────
     vix contains current_level, prev_level, and day_change_pct. No chart.
@@ -452,8 +456,8 @@ async def get_market_analysis() -> dict:
       elevated / fear/crisis) — do not recompute it from the level.
     - Note whether VIX direction confirms or contradicts the equity price action.
     - Incorporate insights from knowledge.volatility.results into the analysis.
-      Write "**Knowledge Base**" in bold before each such insight and cite
-      the source title in parentheses.
+      Use APA in-text citations when referencing a knowledge chunk,
+      e.g. "(VIX Regime Framework, n.d.)".
 
     ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
@@ -486,19 +490,28 @@ async def get_market_analysis() -> dict:
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
     - Incorporate insights from knowledge.yields.results into the analysis.
-      Write "**Knowledge Base**" in bold before each such insight and cite
-      the source title in parentheses.
+      Use APA in-text citations when referencing a knowledge chunk,
+      e.g. "(Yield Curve Interpretation, n.d.)".
 
     ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
     knowledge contains three keys — sector, yields, volatility — each with
     a results list of relevant knowledge base chunks (content, source, score).
     Weave these insights into the opinion sections above rather than listing
-    them separately. Cite the source title when referencing a chunk.
-    If a knowledge section has an error or empty results, skip it silently.
+    them separately. If a knowledge section has an error or empty results,
+    skip it silently.
 
     After all sections, write a 2–3 sentence overall market summary tying
     together the index moves, sector rotation, yield curve, and VIX into a
     single coherent picture of the day's market character.
+
+    ── REFERENCES ────────────────────────────────────────────────────────────
+    At the very end, after the market summary, render a "References" section
+    listing every knowledge base source cited anywhere in the response.
+    Format each entry in APA style:
+      Source Title. (n.d.). Finance Knowledge Base.
+    If source_url is available on the chunk, append it:
+      Source Title. (n.d.). Finance Knowledge Base. source_url
+    List entries alphabetically by title. Omit sources that were not cited.
     """
     return await _get_market_analysis()
 
