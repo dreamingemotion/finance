@@ -178,7 +178,7 @@ async def get_market_analysis() -> dict:
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
-        *[get_bars(d["symbol"], period="5d", interval="1d") for d in _SECTOR_DEFS],
+        *[get_bars(d["symbol"], period="2d", interval="5m") for d in _SECTOR_DEFS],
         get_treasury_yields(),
         get_bars("VIX", period="5d", interval="1d"),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
@@ -263,13 +263,18 @@ async def get_market_analysis() -> dict:
             entry["error"]          = str(result)
             entry["day_change_pct"] = None
         else:
-            bars = result.get("bars", [])
-            pct = _day_change_pct(bars)
+            all_bars = result.get("bars", [])
+            today_bars, prev_close = _split_today_bars(all_bars)
+            last_close = today_bars[-1]["close"] if today_bars else None
+            pct = (
+                round((last_close - prev_close) / prev_close * 100, 2)
+                if prev_close and last_close else None
+            )
             entry["day_change_pct"] = pct
             entry["data_source"]    = result.get("data_source")
-            if bars:
-                entry["current_price"] = bars[-1]["close"]
-                entry["prev_close"]    = bars[-2]["close"] if len(bars) >= 2 else None
+            if today_bars:
+                entry["current_price"] = last_close
+                entry["prev_close"]    = round(prev_close, 2) if prev_close is not None else None
         entry["bar_color"]     = _pct_color(entry.get("day_change_pct"))
         entry["formatted_pct"] = _fmt_pct(entry.get("day_change_pct"))
         sectors.append(entry)
