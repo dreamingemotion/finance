@@ -367,6 +367,15 @@ async def get_market_analysis() -> dict:
 
     Returns the following sections. Follow all rendering rules exactly.
 
+    ── TENSE / MARKET STATUS ─────────────────────────────────────────────────
+    market_open (bool) indicates whether the US equity market is currently
+    trading. Adjust all language accordingly:
+    - market_open = true  → use present tense throughout. Say "is up", "is
+      leading", "is trading at", "so far today", "as of [time] ET", etc.
+      Never say "finished", "closed at", "ended", or imply the session is over.
+    - market_open = false → use past tense. Say "finished", "closed at",
+      "ended the session", etc.
+
     ── HEADER ────────────────────────────────────────────────────────────────
     Display "Market Analysis for {analysis_date}" as a prominent title at the
     very top, before any charts or analysis. analysis_date is a pre-formatted

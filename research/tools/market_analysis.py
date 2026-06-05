@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 
 from research.tools.fred import get_treasury_yields
 from research.tools.knowledge import search_knowledge
@@ -54,6 +55,15 @@ _KNOWLEDGE_QUERIES = [
 
 _UP   = _CHART_STYLE["up_color"]    # #1d9e75
 _DOWN = _CHART_STYLE["down_color"]  # #d85a30
+
+
+def _is_market_open() -> bool:
+    et = datetime.now(ZoneInfo("America/New_York"))
+    if et.weekday() >= 5:
+        return False
+    open_time  = et.replace(hour=9,  minute=30, second=0, microsecond=0)
+    close_time = et.replace(hour=16, minute=0,  second=0, microsecond=0)
+    return open_time <= et < close_time
 
 
 def _ordinal(n: int) -> str:
@@ -338,8 +348,9 @@ async def get_market_analysis() -> dict:
     analysis_date = f"{now.strftime('%B')} {_ordinal(now.day)}, {now.year}"
 
     return {
-        "analysis_type": "market_analysis",
-        "analysis_date": analysis_date,
+        "analysis_type":  "market_analysis",
+        "analysis_date":  analysis_date,
+        "market_open":    _is_market_open(),
         "index_charts": {
             "layout":   "2x2",
             "period":   "1d",
