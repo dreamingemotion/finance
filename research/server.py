@@ -513,7 +513,9 @@ async def get_market_analysis() -> dict:
 
     After all sections, write a 2–3 sentence overall market summary tying
     together the index moves, sector rotation, yield curve, and VIX into a
-    single coherent picture of the day's market character.
+    single coherent picture of the day's market character. This summary must
+    be inferred purely from the data sections above — do not perform any
+    additional web searches for it.
 
     ── REFERENCES ────────────────────────────────────────────────────────────
     At the very end, after the market summary, render a "References" section
