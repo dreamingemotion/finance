@@ -89,6 +89,11 @@ async def commit_ingest(
 
     If the content was already ingested, returns {"duplicate": true, ...}.
     Call again with overwrite=True to replace the existing document.
+
+    IMPORTANT: only call this tool when the user explicitly says to save,
+    commit, or confirm. Never call it automatically after answering a
+    question, explaining a term, or making an edit — always show changes
+    first and wait for the user to approve.
     """
     async with get_db() as db:
         return await _commit_document(db, title, content, chunks, source_url, overwrite)
