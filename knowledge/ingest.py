@@ -43,6 +43,13 @@ Rules:
 - Numbers and percentages are acceptable only when they describe a durable threshold \
   or historical pattern (e.g. "credit spreads above 500bps have historically signaled \
   recession"), not a current reading
+- Generalise to the functional characteristic, not the named instance — identify \
+  the property that makes the insight apply broadly and make that the subject. \
+  E.g. "AI" → "sectors perceived to have long-run deflationary potential"; \
+  "tech" → "high-multiple growth sectors"; "crypto" → "speculative assets with \
+  narrative-driven valuations". Named sectors, companies, or technologies may \
+  appear only as parenthetical historical examples, never as the subject of \
+  the insight
 - One insight per distinct idea; do not bundle unrelated claims
 - Assign 1-3 categories per insight from the provided list
 - Suggest a new snake_case category name only if truly nothing fits
@@ -85,6 +92,13 @@ Rules:
   to a specific date — rephrase as conditions or patterns instead
 - Do NOT extract point-in-time data: current readings, recent percentage moves, \
   this quarter's results, or named market events tied to a specific moment
+- Generalise to the functional characteristic, not the named instance — identify \
+  the property that makes the inference apply broadly and make that the subject. \
+  E.g. "AI" → "sectors perceived to have long-run deflationary potential"; \
+  "tech" → "high-multiple growth sectors"; "crypto" → "speculative assets with \
+  narrative-driven valuations". Named sectors, companies, or technologies may \
+  appear only as parenthetical historical examples, never as the subject of \
+  the insight
 - Only extract insights that genuinely exist in the material — if the document is \
   purely factual data (e.g. raw price tables, earnings releases with no commentary) \
   and none of the four types apply, return an empty array
