@@ -483,8 +483,9 @@ async def get_market_analysis() -> dict:
     - Name the regime from vix.regime (pre-computed: complacent / normal /
       elevated / fear/crisis) — do not recompute it from the level.
     - Note whether VIX direction confirms or contradicts the equity price action.
-    - Infer everything from the index, sector, and treasury data already
-      returned — do NOT perform a web search for the VIX section.
+    - Do NOT perform a new web search for this section. Infer from the index,
+      sector, and treasury data plus any web search results already gathered
+      for those sections.
     - If any knowledge.volatility.results are directly relevant to what the
       data shows, incorporate them. If not, omit them entirely. When citing,
       use APA in-text style, e.g. "(VIX Regime Framework, n.d.)".
