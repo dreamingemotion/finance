@@ -338,10 +338,10 @@ async def analyze(symbol: str, full: bool = True) -> dict:
          from the filing (full only).
       9. Knowledge Context — include only if knowledge chunks are directly
          relevant to the analysis; omit the section entirely if they are not.
-         Use APA in-text citations, e.g. "(Sector Rotation Framework, n.d.)".
-         After the final section, if any sources were cited, render a
-         "References" list in APA style: Source Title. (n.d.). Finance
-         Knowledge Base. [source_url if available]. List alphabetically.
+         Cite with superscript numbers, e.g. "moat is durable.<sup>1</sup>"
+         After the final section, if any sources were cited, render a numbered
+         "References" list matching the superscripts:
+           [n]. Source Title. Finance Knowledge Base. [source_url if available]
     """
     return await _analyze(symbol, full=full)
 
@@ -362,8 +362,14 @@ async def get_market_analysis() -> dict:
     explains the observed market behavior — sector rotations, yield swings,
     risk-on/risk-off moves, VIX spikes, or any notable divergence. Use the
     search results to provide "why" context in each analysis section.
-    Cite news sources inline using the article headline and outlet, e.g.
-    "(Reuters, June 3, 2026)".
+
+    ── CITATION STYLE (applies to every section) ────────────────────────────
+    Use superscript numbers for all citations — both knowledge base chunks
+    and web search results — e.g. "yields fell sharply.<sup>1</sup>"
+    Assign numbers sequentially in the order sources are first cited.
+    Collect all cited sources into a single numbered References list at the
+    very end (after the market summary). Do not use inline author-date
+    format anywhere.
 
     Returns the following sections. Follow all rendering rules exactly.
 
@@ -469,8 +475,8 @@ async def get_market_analysis() -> dict:
     - Whether the rotation pattern suggests risk-on or risk-off positioning.
     - Any notable anomaly (e.g. a defensive sector outperforming on an up day).
     - If any knowledge.sector.results are directly relevant to what the data
-      shows, incorporate them. If not, omit them entirely. When citing, use
-      APA in-text style, e.g. "(Sector Rotation Framework, n.d.)".
+      shows, incorporate them. If not, omit them entirely. Cite with a
+      superscript number per the citation style rule above.
 
     ── SECTION 3: VIX (vix) ─────────────────────────────────────────────────
     vix contains current_level, prev_level, and day_change_pct. No chart.
@@ -487,8 +493,8 @@ async def get_market_analysis() -> dict:
       sector, and treasury data plus any web search results already gathered
       for those sections.
     - If any knowledge.volatility.results are directly relevant to what the
-      data shows, incorporate them. If not, omit them entirely. When citing,
-      use APA in-text style, e.g. "(VIX Regime Framework, n.d.)".
+      data shows, incorporate them. If not, omit them entirely. Cite with a
+      superscript number per the citation style rule above.
 
     ── SECTION 4: TREASURY YIELDS (treasury_yields) ────────────────────────
     treasury_yields.yields lists five maturities in order: 3M, 2Y, 5Y, 10Y, 30Y.
@@ -521,8 +527,8 @@ async def get_market_analysis() -> dict:
     - Whether the curve is steepening or flattening based on today's bps changes.
     - What the shape implies for the economic and credit outlook.
     - If any knowledge.yields.results are directly relevant to what the data
-      shows, incorporate them. If not, omit them entirely. When citing, use
-      APA in-text style, e.g. "(Yield Curve Interpretation, n.d.)".
+      shows, incorporate them. If not, omit them entirely. Cite with a
+      superscript number per the citation style rule above.
 
     ── KNOWLEDGE CONTEXT (knowledge) ────────────────────────────────────────
     knowledge contains three keys — sector, yields, volatility — each with
@@ -540,13 +546,12 @@ async def get_market_analysis() -> dict:
     additional web searches for it.
 
     ── REFERENCES ────────────────────────────────────────────────────────────
-    At the very end, after the market summary, render a "References" section
-    listing every knowledge base source cited anywhere in the response.
-    Format each entry in APA style:
-      Source Title. (n.d.). Finance Knowledge Base.
-    If source_url is available on the chunk, append it:
-      Source Title. (n.d.). Finance Knowledge Base. source_url
-    List entries alphabetically by title. Omit sources that were not cited.
+    At the very end, after the market summary, if any sources were cited
+    render a "References" section with a numbered list matching the
+    superscripts used in the text. Format each entry as:
+      Knowledge base: [n]. Source Title. Finance Knowledge Base. [source_url if available]
+      Web source:     [n]. Author/Outlet. (Date). Headline/Title. URL if available.
+    Omit the References section entirely if nothing was cited.
     """
     return await _get_market_analysis()
 
