@@ -376,6 +376,14 @@ async def get_market_analysis() -> dict:
     - market_open = false → use past tense. Say "finished", "closed at",
       "ended the session", etc.
 
+    ── COLOR RULE (applies to every section) ────────────────────────────────
+    All percentage changes and numeric deltas must be colored based solely on
+    their sign — positive = green (chart_style.up_color #1d9e75), negative =
+    red (chart_style.down_color #d85a30). Never override this based on what
+    the move "means" for the market (e.g. a falling VIX is still negative →
+    red). Always use the pre-computed *_color fields provided in the data
+    rather than deriving colors yourself.
+
     ── HEADER ────────────────────────────────────────────────────────────────
     Display "Market Analysis for {analysis_date}" as a prominent title at the
     very top, before any charts or analysis. analysis_date is a pre-formatted
@@ -468,6 +476,8 @@ async def get_market_analysis() -> dict:
     vix contains current_level, prev_level, and day_change_pct. No chart.
 
     Render the VIX level and day % change before the treasury section.
+    Display vix.formatted_pct colored with vix.pct_color (pre-computed).
+    A falling VIX is still a negative number — color it red, not green.
     Write a short VIX commentary (2–3 sentences):
     - State the current VIX level and vix.formatted_pct day change.
     - Name the regime from vix.regime (pre-computed: complacent / normal /
