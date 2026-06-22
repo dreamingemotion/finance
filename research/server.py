@@ -338,7 +338,8 @@ async def analyze(symbol: str, full: bool = True) -> dict:
          from the filing (full only).
       9. Knowledge Context — include only if knowledge chunks are directly
          relevant to the analysis; omit the section entirely if they are not.
-         Cite with superscript numbers, e.g. "moat is durable.<sup>1</sup>"
+         Cite with Unicode superscript numbers (¹ ² ³ …), not HTML tags,
+         e.g. "moat is durable.¹"
          After the final section, if any sources were cited, render a numbered
          "References" list matching the superscripts:
            [n]. Source Title. Finance Knowledge Base. [source_url if available]
@@ -364,8 +365,9 @@ async def get_market_analysis() -> dict:
     search results to provide "why" context in each analysis section.
 
     ── CITATION STYLE (applies to every section) ────────────────────────────
-    Use superscript numbers for all citations — both knowledge base chunks
-    and web search results — e.g. "yields fell sharply.<sup>1</sup>"
+    Use Unicode superscript numbers for all citations — both knowledge base
+    chunks and web search results — e.g. "yields fell sharply.¹"
+    Use ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹ (Unicode, not HTML <sup> tags).
     Assign numbers sequentially in the order sources are first cited.
     Collect all cited sources into a single numbered References list at the
     very end (after the market summary). Do not use inline author-date
@@ -390,8 +392,9 @@ async def get_market_analysis() -> dict:
     red). Always use the pre-computed *_color fields provided in the data
     rather than deriving colors yourself.
     Colors apply ONLY inside Canvas chart elements and rendered HTML tables.
-    In prose text, do NOT wrap values in <span> or any HTML tags — plain
-    text only. HTML tags in prose will render as raw markup, not color.
+    In prose text, do NOT use any HTML tags (<span>, <sup>, or otherwise) —
+    they render as raw markup. For citation superscripts use Unicode
+    superscript characters instead: ¹ ² ³ ⁴ ⁵ ⁶ ⁷ ⁸ ⁹
 
     ── HEADER ────────────────────────────────────────────────────────────────
     Display "Market Analysis for {analysis_date}" as a prominent title at the
