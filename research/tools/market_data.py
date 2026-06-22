@@ -76,14 +76,17 @@ async def get_snapshot(symbol: str) -> dict:
     (secondary) provided the quote and metrics data.
     P/B is always sourced from yfinance regardless of the primary result.
     """
-    # P/B always comes from yfinance; fetch in parallel with tastytrade data
+    # P/B and yf_quote always come from yfinance; fetch in parallel with tastytrade data.
+    # yf_quote is used to fill null last/volume when the TT trade stream has no data
+    # (common for low-volume symbols where no trade fires in the streaming window).
     results = await asyncio.gather(
         _tt.get_quote(symbol),
         _tt.get_metrics(symbol),
         _yf.get_pb_ratio(symbol),
+        _yf.get_quote(symbol),
         return_exceptions=True,
     )
-    tt_quote, tt_metrics, pb_ratio = results
+    tt_quote, tt_metrics, pb_ratio, yf_quote_sup = results
 
     tt_ok = not isinstance(tt_quote, Exception) and not isinstance(tt_metrics, Exception)
 
@@ -93,13 +96,22 @@ async def get_snapshot(symbol: str) -> dict:
         updated_at_str = tt_quote.pop("updated_at", None)
         data_source = "primary"
         merged = {**tt_quote, **tt_metrics}
+        # Backfill fields the TT trade stream missed (low-volume symbols)
+        if not isinstance(yf_quote_sup, Exception):
+            yf_quote_sup.pop("updated_at", None)
+            if merged.get("last") is None:
+                merged["last"] = yf_quote_sup.get("last")
+            if merged.get("volume") is None:
+                merged["volume"] = yf_quote_sup.get("volume")
     else:
         exc = tt_quote if isinstance(tt_quote, Exception) else tt_metrics
         logger.warning("tastytrade snapshot failed for %s: %r — falling back to yfinance", symbol, exc)
-        yf_quote, yf_metrics = await asyncio.gather(
-            _yf.get_quote(symbol),
-            _yf.get_metrics(symbol),
-        )
+        yf_metrics = await _yf.get_metrics(symbol)
+        # Reuse the already-fetched yf_quote_sup if valid; otherwise fetch fresh
+        if not isinstance(yf_quote_sup, Exception):
+            yf_quote = yf_quote_sup
+        else:
+            yf_quote = await _yf.get_quote(symbol)
         updated_at_str = yf_quote.pop("updated_at", None)
         # pb_ratio was already fetched in the initial gather; reuse it if valid
         if isinstance(pb_ratio, Exception):
