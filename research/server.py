@@ -389,6 +389,9 @@ async def get_market_analysis() -> dict:
     the move "means" for the market (e.g. a falling VIX is still negative →
     red). Always use the pre-computed *_color fields provided in the data
     rather than deriving colors yourself.
+    Colors apply ONLY inside Canvas chart elements and rendered HTML tables.
+    In prose text, do NOT wrap values in <span> or any HTML tags — plain
+    text only. HTML tags in prose will render as raw markup, not color.
 
     ── HEADER ────────────────────────────────────────────────────────────────
     Display "Market Analysis for {analysis_date}" as a prominent title at the

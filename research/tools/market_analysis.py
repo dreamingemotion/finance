@@ -190,7 +190,7 @@ async def get_market_analysis() -> dict:
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
         *[get_quote(d["symbol"]) for d in _SECTOR_DEFS],
         get_treasury_yields(),
-        get_bars("VIX", period="5d", interval="1d"),
+        get_quote("VIX"),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
         return_exceptions=True,
     )
@@ -288,6 +288,28 @@ async def get_market_analysis() -> dict:
         entry["formatted_pct"] = _fmt_pct(entry.get("day_change_pct"))
         sectors.append(entry)
 
+    # Fallback: fetch daily bars for sectors where get_quote returned no prev_close
+    missing = [
+        (i, defn) for i, (defn, entry) in enumerate(zip(_SECTOR_DEFS, sectors))
+        if entry.get("prev_close") is None and entry.get("current_price") is not None
+    ]
+    if missing:
+        fb_results = await asyncio.gather(
+            *[get_bars(defn["symbol"], period="5d", interval="1d") for _, defn in missing],
+            return_exceptions=True,
+        )
+        for (idx, _), fb in zip(missing, fb_results):
+            if not isinstance(fb, Exception):
+                bars = fb.get("bars", [])
+                if len(bars) >= 2:
+                    pc   = bars[-2]["close"]
+                    cur  = sectors[idx]["current_price"]
+                    pct  = round((cur - pc) / pc * 100, 2) if pc else None
+                    sectors[idx]["prev_close"]    = round(pc, 2)
+                    sectors[idx]["day_change_pct"] = pct
+                    sectors[idx]["bar_color"]      = _pct_color(pct)
+                    sectors[idx]["formatted_pct"]  = _fmt_pct(pct)
+
     sectors.sort(key=lambda x: x.get("day_change_pct") or 0.0, reverse=True)
 
     # --- Treasury yields (FRED) ---------------------------------------------
@@ -314,10 +336,12 @@ async def get_market_analysis() -> dict:
                "prev_level": None, "day_change_pct": None, "regime": None,
                "pct_color": None, "formatted_pct": "N/A"}
     else:
-        bars = vix_result.get("bars", [])
-        curr = bars[-1]["close"] if bars else None
-        prev = bars[-2]["close"] if len(bars) >= 2 else None
-        vix_pct = _day_change_pct(bars)
+        curr = vix_result.get("mark") or vix_result.get("last")
+        prev = vix_result.get("close")
+        vix_pct = (
+            round((curr - prev) / prev * 100, 2)
+            if curr is not None and prev else None
+        )
         if curr is None:
             regime = None
         elif curr < 15:
