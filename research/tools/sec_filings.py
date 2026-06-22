@@ -25,13 +25,16 @@ def _workspace() -> Path:
     return path
 
 
-async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
+async def submit_filing(ticker: str, form_type: str, year: int | None = None) -> dict:
     """
     Fetch a filing from EDGAR and index it for search.
 
     Downloads the primary HTML document for the most recent filing of
-    form_type (e.g. "10-K") filed in the given year, converts it to a
-    hierarchical tree, and stores it locally.
+    form_type (e.g. "10-K", "10-Q", "S-1") filed in the given year,
+    converts it to a hierarchical tree, and stores it locally.
+
+    If year is omitted, fetches the most recent filing of that type
+    across all years (useful for S-1 lookups on recent IPOs).
 
     ticker can be a ticker symbol (e.g. "BLK") or a numeric CIK.
     If the ticker lookup fails, the value is tried as a raw CIK.
@@ -44,8 +47,9 @@ async def submit_filing(ticker: str, form_type: str, year: int) -> dict:
     cik    = await edgar.resolve_cik(ticker)
     filing = await edgar.find_filing(cik, form_type, year)
 
+    filing_year = year if year is not None else filing["filing_date"].split("-")[0]
     html_name = (
-        f"{ticker.upper()}_{form_type.upper()}_{year}_{filing['filing_date']}.html"
+        f"{ticker.upper()}_{form_type.upper()}_{filing_year}_{filing['filing_date']}.html"
     )
     html_path = _workspace() / html_name
 

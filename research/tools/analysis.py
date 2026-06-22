@@ -53,7 +53,15 @@ async def _submit_recent_10k(symbol: str) -> dict:
             return await submit_filing(symbol, "10-K", y)
         except Exception:
             continue
-    return {"error": f"No 10-K found for {symbol} in {year} or {year - 1}"}
+    # Recent IPO fallback: no annual report yet, try the S-1 prospectus
+    for form in ["S-1", "S-1/A"]:
+        try:
+            result = await submit_filing(symbol, form)
+            result["filing_note"] = "S-1 used — no 10-K available (recent IPO)"
+            return result
+        except Exception:
+            continue
+    return {"error": f"No 10-K or S-1 found for {symbol}"}
 
 
 async def analyze(symbol: str, full: bool = True) -> dict:

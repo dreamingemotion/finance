@@ -67,7 +67,7 @@ async def resolve_cik(ticker_or_cik: str) -> str:
     return cik
 
 
-def _candidates_from_block(block: dict | None, form_type: str, year: int) -> list[dict]:
+def _candidates_from_block(block: dict | None, form_type: str, year: int | None) -> list[dict]:
     """Extract matching filing candidates from a submissions block."""
     if not block:
         return []
@@ -78,7 +78,8 @@ def _candidates_from_block(block: dict | None, form_type: str, year: int) -> lis
 
     candidates = []
     for form, date, accession, primary_doc in zip(forms, dates, accessions, primary_docs):
-        if form.upper() == form_type.upper() and int(date.split("-")[0]) == year:
+        year_match = year is None or int(date.split("-")[0]) == year
+        if form.upper() == form_type.upper() and year_match:
             candidates.append({
                 "accession_number": accession,
                 "filing_date":      date,
@@ -88,9 +89,12 @@ def _candidates_from_block(block: dict | None, form_type: str, year: int) -> lis
     return candidates
 
 
-async def find_filing(cik: str, form_type: str, year: int) -> dict:
+async def find_filing(cik: str, form_type: str, year: int | None = None) -> dict:
     """
-    Return metadata for the most recent filing of form_type filed in year.
+    Return metadata for the most recent filing of form_type.
+
+    If year is given, restricts to filings in that calendar year.
+    If year is None, returns the most recent filing of that type across all years.
 
     Searches the inline "recent" block first, then follows paginated "files"
     entries if needed (handles companies with large filing histories).
@@ -126,8 +130,9 @@ async def find_filing(cik: str, form_type: str, year: int) -> dict:
                 break
 
     if not candidates:
+        suffix = f" in {year}" if year is not None else ""
         raise ValueError(
-            f"No {form_type} filing found for CIK {cik} in {year}."
+            f"No {form_type} filing found for CIK {cik}{suffix}."
         )
 
     candidates.sort(key=lambda x: x["filing_date"], reverse=True)
