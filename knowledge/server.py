@@ -37,6 +37,7 @@ from shared.knowledge.retriever import KnowledgeRetriever
 from knowledge.ingest import extract_chunks as _extract_chunks
 from knowledge.ingest import commit_document as _commit_document
 from knowledge.ingest import ingest_document as _ingest
+from shared.knowledge.embedder import embed as _embed
 
 _host = os.getenv("KNOWLEDGE_HOST", "0.0.0.0")
 _port = int(os.getenv("KNOWLEDGE_PORT", "8092"))
@@ -180,6 +181,84 @@ async def get_document(document_id: int) -> dict:
         if result is None:
             return {"error": f"No document with id {document_id}"}
         return result
+
+
+@mcp.tool()
+async def update_chunk(
+    chunk_id: int,
+    content: str | None = None,
+    categories: list[str] | None = None,
+) -> dict:
+    """
+    Edit a specific chunk in place. At least one of content or categories must be provided.
+
+    - content: replaces the chunk text and re-embeds it automatically
+    - categories: replaces all existing category tags for this chunk
+
+    Use get_document(document_id) to find chunk IDs. Changes are immediate —
+    show the proposed update to the user and wait for explicit confirmation
+    before calling this tool.
+    """
+    if content is None and categories is None:
+        return {"error": "Provide at least one of content or categories"}
+
+    async with get_db() as db:
+        exists = await db.fetchval(
+            "SELECT id FROM knowledge.chunks WHERE id = $1", chunk_id
+        )
+        if exists is None:
+            return {"error": f"No chunk with id {chunk_id}"}
+
+        async with db.transaction():
+            if content is not None:
+                vector = (await _embed([content]))[0]
+                vec_str = f"[{','.join(str(v) for v in vector)}]"
+                await db.execute(
+                    "UPDATE knowledge.chunks SET content = $1, embedding = $2::vector WHERE id = $3",
+                    content, vec_str, chunk_id,
+                )
+
+            if categories is not None:
+                await db.execute(
+                    "DELETE FROM knowledge.chunk_categories WHERE chunk_id = $1", chunk_id
+                )
+                for cat in categories:
+                    cat = cat.lower().strip().replace(" ", "_")
+                    await db.execute(
+                        """
+                        INSERT INTO knowledge.categories (name, is_seeded)
+                        VALUES ($1, FALSE)
+                        ON CONFLICT (name) DO NOTHING
+                        """,
+                        cat,
+                    )
+                    await db.execute(
+                        "INSERT INTO knowledge.chunk_categories (chunk_id, category) VALUES ($1, $2)",
+                        chunk_id, cat,
+                    )
+
+        return {
+            "updated": True,
+            "chunk_id": chunk_id,
+            "content_updated": content is not None,
+            "categories_updated": categories is not None,
+        }
+
+
+@mcp.tool()
+async def delete_chunk(chunk_id: int) -> dict:
+    """
+    Permanently delete a single chunk without affecting the rest of the document.
+
+    Use get_document(document_id) to find chunk IDs. Cannot be undone.
+    """
+    async with get_db() as db:
+        tag = await db.execute(
+            "DELETE FROM knowledge.chunks WHERE id = $1", chunk_id
+        )
+        if tag.split()[-1] == "0":
+            return {"error": f"No chunk with id {chunk_id}"}
+        return {"deleted": True, "chunk_id": chunk_id}
 
 
 @mcp.tool()
