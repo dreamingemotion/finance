@@ -15,6 +15,8 @@ from .base import MarketDataProvider
 # Add entries here whenever a primary symbol would resolve to the wrong security.
 _YF_SYMBOL_MAP: dict[str, str] = {
     "IXIC": "^IXIC",   # Nasdaq Composite (bare IXIC unknown to Yahoo Finance)
+    "SPX":  "^GSPC",   # S&P 500 index
+    "VIX":  "^VIX",    # CBOE Volatility Index
 }
 
 _PERIOD_DAYS: dict[str, int | None] = {
