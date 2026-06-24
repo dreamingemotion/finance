@@ -120,6 +120,68 @@ class TastytradeProvider(MarketDataProvider):
             "updated_at": updated_at,
         }
 
+    async def get_quotes_batch(self, symbols: list[str]) -> dict[str, dict]:
+        """
+        Stream quotes, trades, and summaries for all symbols using 3 DXLink
+        connections total (instead of 3 × N when calling get_quote per symbol).
+        Returns a dict keyed by uppercase symbol.
+        """
+        client = self._get_client()
+        results = await asyncio.gather(
+            client.stream_quotes(symbols,    duration_seconds=2.0),
+            client.stream_trades(symbols,    duration_seconds=2.0),
+            client.stream_summaries(symbols, duration_seconds=2.0),
+            return_exceptions=True,
+        )
+        quotes_list, trades_list, summaries_list = results
+
+        if all(isinstance(r, Exception) for r in results):
+            raise results[0]
+
+        def _by_sym(lst: list | Exception) -> dict:
+            if isinstance(lst, Exception):
+                return {}
+            return {e.get("event_symbol", "").upper(): e for e in lst}
+
+        q_map = _by_sym(quotes_list)
+        t_map = _by_sym(trades_list)
+        s_map = _by_sym(summaries_list)
+
+        def _f(v):
+            return float(v) if v is not None else None
+
+        out: dict[str, dict] = {}
+        for sym in symbols:
+            sym_u = sym.upper()
+            q = q_map.get(sym_u, {})
+            t = t_map.get(sym_u, {})
+            s = s_map.get(sym_u, {})
+
+            bid  = q.get("bid_price")
+            ask  = q.get("ask_price")
+            last = t.get("price")
+
+            mark: float | None = None
+            if bid is not None and ask is not None:
+                try:
+                    mark = round((float(bid) + float(ask)) / 2, 4)
+                except (TypeError, ValueError):
+                    pass
+            if mark is None:
+                mark = _f(last)
+
+            close = s.get("day_close_price") or s.get("prev_day_close_price")
+            out[sym_u] = {
+                "symbol": sym_u,
+                "bid":    _f(bid),
+                "ask":    _f(ask),
+                "last":   _f(last),
+                "mark":   mark,
+                "close":  _f(close),
+            }
+
+        return out
+
     async def get_metrics(self, symbol: str) -> dict:
         items = await self._get_client().get_metrics([symbol])
         return items[0] if items else {"symbol": symbol}

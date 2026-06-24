@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 
 from research.tools.fred import get_treasury_yields
 from research.tools.knowledge import search_knowledge
-from research.tools.market_data import _CHART_STYLE, get_bars, get_quote
+from research.tools.market_data import _CHART_STYLE, get_bars, get_quotes_batch
 
 # ---------------------------------------------------------------------------
 # Symbol definitions
@@ -184,22 +184,22 @@ async def get_market_analysis() -> dict:
                            and volatility to inform LLM opinion
     """
     n_idx = len(_INDEX_DEFS)
-    n_sec = len(_SECTOR_DEFS)
+    _sec_vix_syms = [d["symbol"] for d in _SECTOR_DEFS] + ["VIX"]
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
-        *[get_quote(d["symbol"]) for d in _SECTOR_DEFS],
+        get_quotes_batch(_sec_vix_syms),
         get_treasury_yields(),
-        get_quote("VIX"),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
         return_exceptions=True,
     )
 
-    idx_results = results[:n_idx]
-    sec_results = results[n_idx : n_idx + n_sec]
-    tsy_result  = results[n_idx + n_sec]
-    vix_result  = results[n_idx + n_sec + 1]
-    kn_results  = results[n_idx + n_sec + 2 :]
+    idx_results  = results[:n_idx]
+    batch_result = results[n_idx]
+    tsy_result   = results[n_idx + 1]
+    kn_results   = results[n_idx + 2:]
+
+    batch: dict[str, dict] = {} if isinstance(batch_result, Exception) else batch_result
 
     # --- Index charts (2×2 grid) --------------------------------------------
     charts: list[dict] = []
@@ -267,13 +267,15 @@ async def get_market_analysis() -> dict:
 
     # --- Sector performance --------------------------------------------------
     sectors: list[dict] = []
-    for defn, result in zip(_SECTOR_DEFS, sec_results):
-        entry = {"symbol": defn["symbol"], "label": defn["label"]}
-        if isinstance(result, Exception):
-            entry["error"]          = str(result)
+    for defn in _SECTOR_DEFS:
+        sym    = defn["symbol"]
+        result = batch.get(sym.upper())
+        entry  = {"symbol": sym, "label": defn["label"]}
+        if result is None or "error" in result:
+            entry["error"]          = (result or {}).get("error", "no data")
             entry["day_change_pct"] = None
         else:
-            current = result.get("mark") or result.get("last")
+            current    = result.get("mark") or result.get("last")
             prev_close = result.get("close")
             pct = (
                 round((current - prev_close) / prev_close * 100, 2)
@@ -331,13 +333,14 @@ async def get_market_analysis() -> dict:
             )
 
     # --- VIX ----------------------------------------------------------------
-    if isinstance(vix_result, Exception):
-        vix = {"symbol": "VIX", "error": str(vix_result), "current_level": None,
-               "prev_level": None, "day_change_pct": None, "regime": None,
-               "pct_color": None, "formatted_pct": "N/A"}
+    vix_raw = batch.get("VIX")
+    if vix_raw is None or "error" in (vix_raw or {}):
+        vix = {"symbol": "VIX", "error": (vix_raw or {}).get("error", "no data"),
+               "current_level": None, "prev_level": None, "day_change_pct": None,
+               "regime": None, "pct_color": None, "formatted_pct": "N/A"}
     else:
-        curr = vix_result.get("mark") or vix_result.get("last")
-        prev = vix_result.get("close")
+        curr = vix_raw.get("mark") or vix_raw.get("last")
+        prev = vix_raw.get("close")
         vix_pct = (
             round((curr - prev) / prev * 100, 2)
             if curr is not None and prev else None
@@ -360,7 +363,7 @@ async def get_market_analysis() -> dict:
             "regime":         regime,
             "pct_color":      _pct_color(vix_pct),
             "formatted_pct":  _fmt_pct(vix_pct),
-            "data_source":    vix_result.get("data_source"),
+            "data_source":    vix_raw.get("data_source"),
         }
 
     # --- Knowledge ----------------------------------------------------------

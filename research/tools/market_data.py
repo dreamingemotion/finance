@@ -63,6 +63,42 @@ async def get_quote(symbol: str) -> dict:
 
 
 # ---------------------------------------------------------------------------
+# get_quotes_batch
+# ---------------------------------------------------------------------------
+
+async def get_quotes_batch(symbols: list[str]) -> dict[str, dict]:
+    """
+    Fetch real-time quotes for multiple symbols using 3 DXLink streams total
+    (vs. 3 × N when calling get_quote individually). Falls back to individual
+    yfinance calls per symbol on primary failure.
+
+    Returns a dict keyed by uppercase symbol with the same shape as get_quote.
+    """
+    try:
+        batch = await _tt.get_quotes_batch(symbols)
+        return {sym: {**data, "data_source": "primary"} for sym, data in batch.items()}
+    except Exception as exc:
+        logger.warning(
+            "tastytrade get_quotes_batch failed: %r — falling back to yfinance per symbol", exc
+        )
+
+    yf_results = await asyncio.gather(
+        *[_yf.get_quote(sym) for sym in symbols],
+        return_exceptions=True,
+    )
+    out: dict[str, dict] = {}
+    for sym, result in zip(symbols, yf_results):
+        sym_u = sym.upper()
+        if isinstance(result, Exception):
+            logger.warning("yfinance get_quote failed for %s: %r", sym, result)
+            out[sym_u] = {"symbol": sym_u, "data_source": "secondary", "error": str(result)}
+        else:
+            result.pop("updated_at", None)
+            out[sym_u] = {**result, "data_source": "secondary"}
+    return out
+
+
+# ---------------------------------------------------------------------------
 # get_snapshot
 # ---------------------------------------------------------------------------
 
