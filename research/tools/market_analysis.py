@@ -184,20 +184,22 @@ async def get_market_analysis() -> dict:
                            and volatility to inform LLM opinion
     """
     n_idx = len(_INDEX_DEFS)
-    _sec_vix_syms = [d["symbol"] for d in _SECTOR_DEFS] + ["VIX"]
+    _sec_syms = [d["symbol"] for d in _SECTOR_DEFS]
 
     results = await asyncio.gather(
         *[get_bars(d["symbol"], period="2d", interval="5m") for d in _INDEX_DEFS],
-        get_quotes_batch(_sec_vix_syms),
+        get_bars("VIX", period="2d", interval="5m"),
+        get_quotes_batch(_sec_syms),
         get_treasury_yields(),
         *[search_knowledge(q, categories=cats, limit=3) for _, q, cats in _KNOWLEDGE_QUERIES],
         return_exceptions=True,
     )
 
     idx_results  = results[:n_idx]
-    batch_result = results[n_idx]
-    tsy_result   = results[n_idx + 1]
-    kn_results   = results[n_idx + 2:]
+    vix_bars     = results[n_idx]
+    batch_result = results[n_idx + 1]
+    tsy_result   = results[n_idx + 2]
+    kn_results   = results[n_idx + 3:]
 
     batch: dict[str, dict] = {} if isinstance(batch_result, Exception) else batch_result
 
@@ -333,14 +335,18 @@ async def get_market_analysis() -> dict:
             )
 
     # --- VIX ----------------------------------------------------------------
-    vix_raw = batch.get("VIX")
-    if vix_raw is None or "error" in (vix_raw or {}):
-        vix = {"symbol": "VIX", "error": (vix_raw or {}).get("error", "no data"),
+    # VIX is a calculated index — stream_quotes/trades emit nothing for it, only
+    # stream_summaries returns data. Fetch intraday bars instead, same as the
+    # main indexes, so we get a reliable current level and yesterday's close.
+    if isinstance(vix_bars, Exception) or not isinstance(vix_bars, dict):
+        vix = {"symbol": "VIX", "error": str(vix_bars) if isinstance(vix_bars, Exception) else "no data",
                "current_level": None, "prev_level": None, "day_change_pct": None,
                "regime": None, "pct_color": None, "formatted_pct": "N/A"}
     else:
-        curr = vix_raw.get("mark") or vix_raw.get("last")
-        prev = vix_raw.get("close")
+        _vix_all = vix_bars.get("bars", [])
+        _vix_today, _vix_prev_close = _split_today_bars(_vix_all)
+        curr = _vix_today[-1]["close"] if _vix_today else None
+        prev = _vix_prev_close
         vix_pct = (
             round((curr - prev) / prev * 100, 2)
             if curr is not None and prev else None
@@ -363,7 +369,7 @@ async def get_market_analysis() -> dict:
             "regime":         regime,
             "pct_color":      _pct_color(vix_pct),
             "formatted_pct":  _fmt_pct(vix_pct),
-            "data_source":    vix_raw.get("data_source"),
+            "data_source":    vix_bars.get("data_source"),
         }
 
     # --- Knowledge ----------------------------------------------------------
