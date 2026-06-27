@@ -70,11 +70,40 @@ from research.tools.analysis import analyze as _analyze
 from research.tools.valuation import get_valuation_ratios as _get_valuation_ratios
 from research.tools.market_analysis import get_market_analysis as _get_market_analysis
 from research.tools.fred import get_fred_series as _get_fred_series
+from shared.prompts import load_prompt, save_prompt
+
+_PROMPT_NAME = "market_analysis"
 
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
 
 mcp = FastMCP("finance-research", host=_host, port=_port)
+
+
+@mcp.tool()
+async def get_instructions() -> str:
+    """
+    Load and return the current operating instructions for this agent.
+
+    Call this at the start of every session before doing anything else.
+    The instructions govern tool selection, data sourcing rules, and general
+    behavior. They can be updated mid-session via update_instructions.
+    """
+    return load_prompt(_PROMPT_NAME)
+
+
+@mcp.tool()
+async def update_instructions(content: str) -> dict:
+    """
+    Replace the agent's operating instructions with new content.
+
+    Use this when the user asks to change, add, or remove a behavioral rule.
+    Show the user the proposed change before calling this tool and wait for
+    explicit confirmation. Changes take effect immediately for this session
+    and persist for all future sessions.
+    """
+    save_prompt(_PROMPT_NAME, content)
+    return {"updated": True, "prompt": _PROMPT_NAME}
 
 
 @mcp.tool()
