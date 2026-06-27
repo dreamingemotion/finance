@@ -72,8 +72,6 @@ from research.tools.market_analysis import get_market_analysis as _get_market_an
 from research.tools.fred import get_fred_series as _get_fred_series
 from shared.prompts import load_prompt, save_prompt
 
-_PROMPT_NAME = "market_analysis"
-
 _host = os.getenv("RESEARCH_HOST", "0.0.0.0")
 _port = int(os.getenv("RESEARCH_PORT", "8093"))
 
@@ -81,29 +79,35 @@ mcp = FastMCP("finance-research", host=_host, port=_port)
 
 
 @mcp.tool()
-async def get_instructions() -> str:
+async def get_instructions(name: str) -> str:
     """
-    Load and return the current operating instructions for this agent.
+    Load and return the operating instructions for a specific workflow.
 
-    Call this at the start of every session before doing anything else.
-    The instructions govern tool selection, data sourcing rules, and general
-    behavior. They can be updated mid-session via update_instructions.
+    Call this at the start of every session before doing anything else,
+    passing the name that matches what the user wants to do.
+
+    Available prompts:
+      market_analysis   — daily market overview, index/sector/yield/VIX analysis
+      security_analysis — deep-dive analysis on a single ticker
+
+    Instructions govern tool selection, data sourcing rules, and behavior.
+    They can be updated mid-session via update_instructions.
     """
-    return load_prompt(_PROMPT_NAME)
+    return load_prompt(name)
 
 
 @mcp.tool()
-async def update_instructions(content: str) -> dict:
+async def update_instructions(name: str, content: str) -> dict:
     """
-    Replace the agent's operating instructions with new content.
+    Replace the operating instructions for a specific workflow.
 
     Use this when the user asks to change, add, or remove a behavioral rule.
     Show the user the proposed change before calling this tool and wait for
     explicit confirmation. Changes take effect immediately for this session
     and persist for all future sessions.
     """
-    save_prompt(_PROMPT_NAME, content)
-    return {"updated": True, "prompt": _PROMPT_NAME}
+    save_prompt(name, content)
+    return {"updated": True, "prompt": name}
 
 
 @mcp.tool()
