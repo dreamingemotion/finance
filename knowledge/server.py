@@ -38,11 +38,40 @@ from knowledge.ingest import extract_chunks as _extract_chunks
 from knowledge.ingest import commit_document as _commit_document
 from knowledge.ingest import ingest_document as _ingest
 from shared.knowledge.embedder import embed as _embed
+from shared.prompts import load_prompt, save_prompt
+
+_PROMPT_NAME = "knowledge_intake"
 
 _host = os.getenv("KNOWLEDGE_HOST", "0.0.0.0")
 _port = int(os.getenv("KNOWLEDGE_PORT", "8092"))
 
 mcp = FastMCP("finance-knowledge", host=_host, port=_port)
+
+
+@mcp.tool()
+async def get_instructions() -> str:
+    """
+    Load and return the current operating instructions for this agent.
+
+    Call this at the start of every session before doing anything else.
+    The instructions govern ingestion workflow, review behavior, retrieval,
+    and curation. They can be updated mid-session via update_instructions.
+    """
+    return load_prompt(_PROMPT_NAME)
+
+
+@mcp.tool()
+async def update_instructions(content: str) -> dict:
+    """
+    Replace the agent's operating instructions with new content.
+
+    Use this when the user asks to change, add, or remove a behavioral rule.
+    Show the user the proposed change before calling this tool and wait for
+    explicit confirmation. Changes take effect immediately for this session
+    and persist for all future sessions.
+    """
+    save_prompt(_PROMPT_NAME, content)
+    return {"updated": True, "prompt": _PROMPT_NAME}
 
 
 @mcp.tool()
