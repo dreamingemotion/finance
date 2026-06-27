@@ -184,6 +184,63 @@ async def get_document(document_id: int) -> dict:
 
 
 @mcp.tool()
+async def add_chunk(
+    document_id: int,
+    content: str,
+    categories: list[str],
+) -> dict:
+    """
+    Add a new chunk to an existing document.
+
+    Embeds the content and saves it under the given document. Useful for
+    manually adding insights that the extraction passes missed, or for
+    adding a definition or clarification chunk during review.
+    """
+    async with get_db() as db:
+        exists = await db.fetchval(
+            "SELECT id FROM knowledge.documents WHERE id = $1", document_id
+        )
+        if exists is None:
+            return {"error": f"No document with id {document_id}"}
+
+        vector = (await _embed([content]))[0]
+        vec_str = f"[{','.join(str(v) for v in vector)}]"
+
+        new_categories: list[str] = []
+        async with db.transaction():
+            chunk_id = await db.fetchval(
+                """
+                INSERT INTO knowledge.chunks (document_id, content, embedding)
+                VALUES ($1, $2, $3::vector)
+                RETURNING id
+                """,
+                document_id, content, vec_str,
+            )
+            for cat in categories:
+                cat = cat.lower().strip().replace(" ", "_")
+                await db.execute(
+                    """
+                    INSERT INTO knowledge.categories (name, is_seeded)
+                    VALUES ($1, FALSE)
+                    ON CONFLICT (name) DO NOTHING
+                    """,
+                    cat,
+                )
+                await db.execute(
+                    "INSERT INTO knowledge.chunk_categories (chunk_id, category) VALUES ($1, $2)",
+                    chunk_id, cat,
+                )
+                new_categories.append(cat)
+
+        return {
+            "added": True,
+            "chunk_id": chunk_id,
+            "document_id": document_id,
+            "categories": new_categories,
+        }
+
+
+@mcp.tool()
 async def update_chunk(
     chunk_id: int,
     content: str | None = None,
