@@ -90,6 +90,7 @@ async def get_instructions(name: str) -> str:
       market_analysis   — daily market overview, index/sector/yield/VIX analysis
       security_analysis — deep-dive analysis on a single ticker
 
+
     Instructions govern tool selection, data sourcing rules, and behavior.
     They can be updated mid-session via update_instructions.
     """
