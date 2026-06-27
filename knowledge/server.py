@@ -262,6 +262,51 @@ async def delete_chunk(chunk_id: int) -> dict:
 
 
 @mcp.tool()
+async def update_document(
+    document_id: int,
+    title: str | None = None,
+    source_url: str | None = None,
+) -> dict:
+    """
+    Update a document's title or source_url. At least one must be provided.
+
+    Does not affect chunks or embeddings. To update content, delete and re-ingest.
+    """
+    if title is None and source_url is None:
+        return {"error": "Provide at least one of title or source_url"}
+
+    async with get_db() as db:
+        exists = await db.fetchval(
+            "SELECT id FROM knowledge.documents WHERE id = $1", document_id
+        )
+        if exists is None:
+            return {"error": f"No document with id {document_id}"}
+
+        if title is not None and source_url is not None:
+            await db.execute(
+                "UPDATE knowledge.documents SET title = $1, source_url = $2 WHERE id = $3",
+                title, source_url, document_id,
+            )
+        elif title is not None:
+            await db.execute(
+                "UPDATE knowledge.documents SET title = $1 WHERE id = $2",
+                title, document_id,
+            )
+        else:
+            await db.execute(
+                "UPDATE knowledge.documents SET source_url = $1 WHERE id = $2",
+                source_url, document_id,
+            )
+
+        return {
+            "updated": True,
+            "document_id": document_id,
+            "title_updated": title is not None,
+            "source_url_updated": source_url is not None,
+        }
+
+
+@mcp.tool()
 async def delete_document(document_id: int) -> dict:
     """
     Permanently delete a document and all its chunks. Cannot be undone.
